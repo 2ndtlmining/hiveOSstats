@@ -1,2 +1,2 @@
 # hiveOSstats
-Hive OS sttats
+Hive OS stats
