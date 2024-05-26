@@ -97,7 +97,7 @@ def update_graph(report_value, dropdown_value):
     if not dff.empty:
         dff['snapshot'] = pd.to_datetime(dff['snapshot'])  # Convert 'snapshot' column to datetime
         dff = dff.groupby(pd.Grouper(key='snapshot', freq='D')).agg({'amount': 'mean'})
-        return px.line(dff, x=dff.index, y='amount', markers=True, template='plotly_dark')
+        return px.line(dff, x=dff.index, y='amount', markers=True, template='plotly_dark').update_layout(yaxis_title='%')
                 
     else:
         return {}
