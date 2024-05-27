@@ -140,7 +140,7 @@ def update_dropdown_options(report_value):
 def take_snapshot(n_clicks):
     if n_clicks > 0:
         import subprocess
-        subprocess.run(['python', 'snapshot.py'])
+        subprocess.run(['python3', 'snapshot.py'])
         return html.Div('Snapshot taken successfully.')
     else:
         return html.Div()
@@ -153,7 +153,7 @@ def take_snapshot(n_clicks):
 def run_excel_output(n_clicks):
     if n_clicks > 0:
         import subprocess
-        subprocess.run(['python', 'excel_output.py'])
+        subprocess.run(['python3', 'excel_output.py'])
         return html.Div('Excel output generated successfully.')
     else:
         return html.Div()
