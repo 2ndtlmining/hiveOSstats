@@ -7,6 +7,9 @@ WORKDIR /app
 # Copy data accross
 COPY . /app
 
+# Set the permissions of the /app folder
+RUN chmod -R 755 /app
+
 # Install necessary dependencies
 RUN apt-get update && \
     apt-get install -y python3 python3-pip && \
@@ -18,4 +21,4 @@ RUN pip3 install --no-cache-dir -r /app/requirements.txt
 EXPOSE 8050
 
 # Set the command to run the application when the container starts
-CMD ["python", "app.py"]
+CMD ["python3", "app.py"]

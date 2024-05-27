@@ -65,14 +65,30 @@ async def clean_data(data):
 
     # Return the cleaned data dictionary
     return cleaned_data
+
+
+# Function to store the data in JSON format
 async def store_data(data, filename):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     month = datetime.now().strftime("%b").lower()  # Three-letter abbreviation of the month
     data_folder = "data"  # Specify the path to your data folder
+
+    # Check the current permissions of the data folder
+    current_permissions = os.stat(data_folder).st_mode
+    print(f"Current permissions of the data folder: {oct(current_permissions)}")
+
+    # Set the permissions of the data folder to read, write, and execute for the owner, read and execute for the group, and read and execute for others
+    new_permissions = 0o755
+    os.chmod(data_folder, new_permissions)
+    print(f"New permissions of the data folder: {oct(new_permissions)}")
+
+
+    # Create the data folder if it doesn't exist
     file_path = os.path.join(data_folder, f"{filename}_{month}_{timestamp}.json")
 
     os.makedirs(data_folder, exist_ok=True)  # Create the data folder if it doesn't exist
 
+    # Write the data to the JSON file
     with open(file_path, "w") as file:
         json.dump(data, file)
         print(f"Data created: {file_path}")

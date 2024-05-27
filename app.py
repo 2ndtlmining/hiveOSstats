@@ -97,6 +97,7 @@ def update_graph(report_value, dropdown_value):
         dff = pd.DataFrame()
 
     if not dff.empty:
+        dff = dff.copy()  # Create a new DataFrame copy
         dff['snapshot'] = pd.to_datetime(dff['snapshot'])  # Convert 'snapshot' column to datetime
         dff = dff.groupby(pd.Grouper(key='snapshot', freq='D')).agg({'amount': 'mean'})
         return px.line(dff, x=dff.index, y='amount', markers=True, template='plotly_dark').update_layout(yaxis_title='%')
@@ -143,6 +144,7 @@ def take_snapshot(n_clicks):
         subprocess.run(['python3', 'snapshot.py'])
         return html.Div('Snapshot taken successfully.')
     else:
+        print("Snapshot not taken.")
         return html.Div()
 
 # Excel output
@@ -156,6 +158,7 @@ def run_excel_output(n_clicks):
         subprocess.run(['python3', 'excel_output.py'])
         return html.Div('Excel output generated successfully.')
     else:
+        print("Excel output not generated.")
         return html.Div()
 
 # Reload the data 
@@ -167,8 +170,10 @@ def reload_data(n_clicks):
     if n_clicks > 0:
         global coins, algos, gpu_brands, nvidia_models, amd_models, miners
         coins, algos, gpu_brands, nvidia_models, amd_models, miners = generate_dataframes(data_dir)  # Call the generate_dataframes function
+        print ("Data reloaded successfully.")
         return html.Div('Data reloaded successfully.'),
     else:
+        print("Data not reloaded.")
         return html.Div()
 
 
