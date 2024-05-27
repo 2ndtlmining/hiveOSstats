@@ -75,6 +75,7 @@ async def store_data(data, filename):
 
     with open(file_path, "w") as file:
         json.dump(data, file)
+        print(f"Data created: {file_path}")
 
 
 # Run the asynchronous functions

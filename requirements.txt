@@ -6,3 +6,4 @@ dash_bootstrap_templates
 aiohttp
 asyncio
 gunicorn
+regex
