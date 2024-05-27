@@ -70,9 +70,12 @@ def generate_dataframes(data_dir):
 reports = {'Coins': 'coins', 'Algos': 'algos', 'GPU Brands': 'gpu_brands', 'NVIDIA Models': 'nvidia_models', 'AMD Models': 'amd_models', 'Miners': 'miners'}
 coins, algos, gpu_brands, nvidia_models, amd_models, miners = generate_dataframes(data_dir)
 
-# Dash app
-app = Dash(__name__, external_stylesheets = [dbc.themes.BOOTSTRAP, dbc.themes.DARKLY])
+# Webserver
 server = Flask(__name__)
+
+# Dash app
+app = Dash(__name__, external_stylesheets = [dbc.themes.BOOTSTRAP, dbc.themes.DARKLY], server=server)
+
 
 # Graph
 @callback(
