@@ -4,6 +4,7 @@ import pandas as pd
 import glob, json, os
 import dash_bootstrap_components as dbc
 from dash_bootstrap_templates import load_figure_template
+from flask import Flask
 
 load_figure_template(["cyborg", "darkly"])
 
@@ -71,6 +72,7 @@ coins, algos, gpu_brands, nvidia_models, amd_models, miners = generate_dataframe
 
 # Dash app
 app = Dash(__name__, external_stylesheets = [dbc.themes.BOOTSTRAP, dbc.themes.DARKLY])
+server = Flask(__name__)
 
 # Graph
 @callback(
@@ -209,6 +211,9 @@ app.layout = html.Div(
     ]
 )
 
+@server.route('/')
+def index():
+    return app.index()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run_server(debug=True)
