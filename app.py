@@ -4,7 +4,6 @@ import pandas as pd
 import glob, json, os
 import dash_bootstrap_components as dbc
 from dash_bootstrap_templates import load_figure_template
-from flask import Flask
 
 load_figure_template(["cyborg", "darkly"])
 
@@ -70,11 +69,9 @@ def generate_dataframes(data_dir):
 reports = {'Coins': 'coins', 'Algos': 'algos', 'GPU Brands': 'gpu_brands', 'NVIDIA Models': 'nvidia_models', 'AMD Models': 'amd_models', 'Miners': 'miners'}
 coins, algos, gpu_brands, nvidia_models, amd_models, miners = generate_dataframes(data_dir)
 
-# Webserver
-server = Flask(__name__)
 
 # Dash app
-app = Dash(__name__, external_stylesheets = [dbc.themes.BOOTSTRAP, dbc.themes.DARKLY], server=server)
+app = Dash(__name__, external_stylesheets = [dbc.themes.BOOTSTRAP, dbc.themes.DARKLY])
 
 
 # Graph
@@ -214,9 +211,6 @@ app.layout = html.Div(
     ]
 )
 
-@server.route('/')
-def index():
-    return app.index()
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(host='0.0.0.0', port=8050, debug=True)
