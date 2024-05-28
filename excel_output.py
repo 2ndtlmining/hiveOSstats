@@ -104,9 +104,9 @@ def create_differences_excel(dataframes, output_file):
 differences_output_file = 'differences_output.xlsx'
 create_differences_excel(dataframes, differences_output_file)
 
-def create_pivot_excel(dataframes, pivot_output_file):
+def create_daily_pivot_excel(dataframes, pivot_daily_output_file):
     # Create a new Excel writer object
-    pivotwriter = pd.ExcelWriter(pivot_output_file, engine='xlsxwriter')
+    pivotwriter = pd.ExcelWriter(pivot_daily_output_file, engine='xlsxwriter')
 
     # Create a pivot table
     for df_name, df in dataframes.items():
@@ -117,8 +117,29 @@ def create_pivot_excel(dataframes, pivot_output_file):
     pivotwriter._save()
 
     # Print a message indicating that the data has been created
-    print(f"Data created: {pivot_output_file}")
+    print(f"Data created: {pivot_daily_output_file}")
 
 # Call the function
-pivot_output_file = 'pivot_output.xlsx'
-create_pivot_excel(dataframes, pivot_output_file)
+pivot_daily_output_file = 'pivot_daily_output.xlsx'
+create_daily_pivot_excel(dataframes, pivot_daily_output_file)
+
+def create_monthly_pivot_excel(dataframes, pivot_monthly_output_file):
+    # Create a new Excel writer object
+    pivotwriter = pd.ExcelWriter(pivot_monthly_output_file, engine='xlsxwriter')
+
+    # Create a pivot table and aggregate values to monthly
+    for df_name, df in dataframes.items():
+        df['snapshot'] = pd.to_datetime(df['snapshot'])
+        df['month'] = df['snapshot'].dt.to_period('M')
+        pivot_table = df.pivot_table(index='name', columns='month', values='amount', aggfunc='mean').reset_index()
+        pivot_table.to_excel(pivotwriter, sheet_name=f'{df_name}_Pivot', index=False)
+
+    # Save the Excel file
+    pivotwriter._save()
+
+    # Print a message indicating that the data has been created
+    print(f"Data created: {pivot_monthly_output_file}")
+
+# Call the function
+pivot_monthly_output_file = 'pivot_monthly_output.xlsx'
+create_monthly_pivot_excel(dataframes, pivot_monthly_output_file)

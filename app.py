@@ -4,10 +4,43 @@ import pandas as pd
 import glob, json, os
 import dash_bootstrap_components as dbc
 from dash_bootstrap_templates import load_figure_template
+from datetime import datetime, timedelta
+import subprocess
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 load_figure_template(["cyborg", "darkly"])
 
 data_dir = 'data'
+
+def check_and_take_snapshot():
+    # Get all cleaned_data.json files in the data directory
+    cleaned_data_files = glob.glob(os.path.join(data_dir, 'cleaned_data*.json'))
+
+    # Sort the files by modification time
+    cleaned_data_files.sort(key=os.path.getmtime)
+
+    # Get the last file in the list
+    last_file = cleaned_data_files[-1] if cleaned_data_files else None
+
+    # Check if the last file is older than 24 hours
+    if last_file and datetime.fromtimestamp(os.path.getmtime(last_file)) < datetime.now() - timedelta(days=1):
+        # Run the snapshot.py script
+        with ThreadPoolExecutor() as executor:
+            executor.submit(subprocess.run, ['python3', 'snapshot.py'])
+        print("Snapshot taken successfully!")
+    else:
+        print(f"No snapshot taken. Last snapshot ({last_file}) is less than 24 hours old.")
+
+# Schedule the check_and_take_snapshot function to run every 5 minutes
+def run_scheduler():
+    while True:
+        check_and_take_snapshot()
+        time.sleep(5 * 60)  # Sleep for 5 minutes
+
+scheduler_thread = ThreadPoolExecutor().submit(run_scheduler)
+
+
 
 def generate_dataframes(data_dir):
     # Get all cleaned_data.json files in the data directory
