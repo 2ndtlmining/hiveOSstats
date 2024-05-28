@@ -100,10 +100,13 @@ def update_graph(report_value, dropdown_value):
         dff = dff.copy()  # Create a new DataFrame copy
         dff['snapshot'] = pd.to_datetime(dff['snapshot'])  # Convert 'snapshot' column to datetime
         dff = dff.groupby(pd.Grouper(key='snapshot', freq='D')).agg({'amount': 'mean'})
-        return px.line(dff, x=dff.index, y='amount', markers=True, template='plotly_dark').update_layout(yaxis_title='%')
-                
+        figure = px.line(dff, x=dff.index, y='amount', markers=True, template='plotly_dark').update_layout(yaxis_title='%')
+
+        return figure
     else:
         return {}
+
+
 
 # Dropdown button filter
 @callback(
@@ -177,6 +180,8 @@ def reload_data(n_clicks):
         return html.Div()
 
 
+
+#App Layout
 app.layout = html.Div(
     id='app-container',
     className='container',
@@ -212,10 +217,8 @@ app.layout = html.Div(
         ),
         html.Div(id='snapshot-output'),
         html.Div(id='excel-output'),
-        html.Div(id='reload-output')
-    ]
-)
-
+        html.Div(id='reload-output'),
+        ])
 
 if __name__ == '__main__':
     app.run_server(host='0.0.0.0', port=8050, debug=True)
