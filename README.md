@@ -23,7 +23,7 @@ Depending on how you want to run the application, either natively or via docker
     - Run the app with: ```python3 app.py```
 - Docker:
     - Ensure you have docker installed: ```apt install docker.io```
-    - Create the image: ```sudo docker build -t <whatever you want to call the app>```
+    - Create the image: ```sudo docker build -t <whatever you want to call the app> .```
     - Run the image: ```docker run -p 8050:8050 -v /:/app/data <whatever its called by now>```
 
 
