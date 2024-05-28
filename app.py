@@ -22,6 +22,7 @@ def check_and_take_snapshot():
 
     # Get the last file in the list
     last_file = cleaned_data_files[-1] if cleaned_data_files else None
+    last_modified_time = datetime.fromtimestamp(os.path.getmtime(last_file)) if last_file else None
 
     # Check if the last file is older than 24 hours
     if last_file and datetime.fromtimestamp(os.path.getmtime(last_file)) < datetime.now() - timedelta(days=1):
@@ -31,6 +32,7 @@ def check_and_take_snapshot():
         print("Snapshot taken successfully!")
     else:
         print(f"No snapshot taken. Last snapshot ({last_file}) is less than 24 hours old.")
+        print(f"Last modified time: {last_modified_time}")
 
 # Schedule the check_and_take_snapshot function to run every 5 minutes
 def run_scheduler():
