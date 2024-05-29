@@ -4,7 +4,7 @@ import pandas as pd
 import glob, json, os
 import dash_bootstrap_components as dbc
 from dash_bootstrap_templates import load_figure_template
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -22,10 +22,10 @@ def check_and_take_snapshot():
 
     # Get the last file in the list
     last_file = cleaned_data_files[-1] if cleaned_data_files else None
-    last_modified_time = datetime.fromtimestamp(os.path.getmtime(last_file)) if last_file else None
+    last_modified_time = datetime.fromtimestamp(os.path.getmtime(last_file), tz=timezone.utc) if last_file else None
 
     # Check if the last file is older than 24 hours
-    if last_file and datetime.fromtimestamp(os.path.getmtime(last_file)) < datetime.now() - timedelta(days=1):
+    if last_file and last_modified_time < datetime.now(timezone.utc) - timedelta(days=1):
         # Run the snapshot.py script
         with ThreadPoolExecutor() as executor:
             executor.submit(subprocess.run, ['python3', 'snapshot.py'])
