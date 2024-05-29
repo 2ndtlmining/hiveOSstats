@@ -34,11 +34,11 @@ def check_and_take_snapshot():
         print(f"No snapshot taken. Last snapshot ({last_file}) is less than 24 hours old.")
         print(f"Last modified time: {last_modified_time}")
 
-# Schedule the check_and_take_snapshot function to run every 5 minutes
+# Schedule the check_and_take_snapshot function to run every hour
 def run_scheduler():
     while True:
         check_and_take_snapshot()
-        time.sleep(5 * 60)  # Sleep for 5 minutes
+        time.sleep(60 * 60)  # Sleep for 1 hour
 
 scheduler_thread = ThreadPoolExecutor().submit(run_scheduler)
 
