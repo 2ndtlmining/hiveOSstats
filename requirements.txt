@@ -10,3 +10,4 @@ regex
 xlsxwriter
 schedule
 datetime
+logging

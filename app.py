@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
+import logging
 
 load_figure_template(["cyborg", "darkly"])
 
@@ -22,17 +23,27 @@ def check_and_take_snapshot():
 
     # Get the last file in the list
     last_file = cleaned_data_files[-1] if cleaned_data_files else None
-    last_modified_time = datetime.fromtimestamp(os.path.getmtime(last_file), tz=timezone.utc) if last_file else None
 
-    # Check if the last file is older than 24 hours
-    if last_file and last_modified_time < datetime.now(timezone.utc) - timedelta(days=1):
-        # Run the snapshot.py script
-        with ThreadPoolExecutor() as executor:
-            executor.submit(subprocess.run, ['python3', 'snapshot.py'])
-        print("Snapshot taken successfully!")
+    if last_file:
+        last_modified_time = datetime.fromtimestamp(os.path.getmtime(last_file), tz=timezone.utc)
+        current_time = datetime.now(timezone.utc)
+
+        # Check if the last file is older than 24 hours
+        if last_modified_time < current_time - timedelta(days=1):
+            try:
+                # Run the snapshot.py script
+                with ThreadPoolExecutor() as executor:
+                    executor.submit(subprocess.run, ['python3', 'snapshot.py'], check=True)
+                logging.info("Snapshot taken successfully!")
+                logging.info(f"Current time: {current_time}")
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Error running snapshot.py: {e}")
+        else:
+            logging.info(f"No snapshot taken. Last snapshot ({last_file}) is less than 24 hours old.")
+            logging.info(f"Last modified time: {last_modified_time}")
+            logging.info(f"Current time: {current_time}")
     else:
-        print(f"No snapshot taken. Last snapshot ({last_file}) is less than 24 hours old.")
-        print(f"Last modified time: {last_modified_time}")
+        logging.info("No cleaned data files found.")
 
 # Schedule the check_and_take_snapshot function to run every hour
 def run_scheduler():
