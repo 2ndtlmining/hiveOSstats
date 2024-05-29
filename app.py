@@ -47,6 +47,9 @@ scheduler_thread = ThreadPoolExecutor().submit(run_scheduler)
 def generate_dataframes(data_dir):
     # Get all cleaned_data.json files in the data directory
     cleaned_data_files = glob.glob(os.path.join(data_dir, 'cleaned_data*.json'))
+    
+    # Print the cleaned data files
+    print(f"Cleaned data files: {cleaned_data_files}")
 
     # Initialize empty dataframes
     coins = pd.DataFrame()
