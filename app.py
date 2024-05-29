@@ -16,38 +16,45 @@ data_dir = 'data'
 
 def check_and_take_snapshot():
     # Get all cleaned_data.json files in the data directory
-    cleaned_data_files = glob.glob(os.path.join(data_dir, 'cleaned_data*.json'))
+    print("Checking and taking snapshot process started...")
+    cleaned_data_files = sorted(glob.glob(os.path.join(data_dir, 'cleaned_data*.json')), key=os.path.getmtime, reverse=True)
+    print("Cleaned files are: ", cleaned_data_files)
 
-    # Sort the files by modification time
-    cleaned_data_files.sort(key=os.path.getmtime)
+    if cleaned_data_files:
+        # Get the latest cleaned data file
+        latest_file = cleaned_data_files[0]
+        print("Latest file is: ", latest_file)
 
-    # Get the last file in the list
-    last_file = cleaned_data_files[-1] if cleaned_data_files else None
+        # Read the first record from the file
+        with open(latest_file) as f:
+            data = json.load(f)
+            first_record = list(data.values())[0]
+            snapshot_time = datetime.strptime(next(iter(first_record.values()))['snapshot'], "%Y-%m-%d %H:%M:%S")
+            snapshot_time = snapshot_time.replace(tzinfo=timezone.utc).astimezone(tz=None)
+            print(f"Snapshot time: {snapshot_time}")
+            current_time = datetime.now(timezone.utc).astimezone(tz=None)
+            print(f"Current time: {current_time}")
 
-    if last_file:
-        last_modified_time = datetime.fromtimestamp(os.path.getmtime(last_file), tz=timezone.utc)
-        current_time = datetime.now(timezone.utc)
-
-        # Check if the last file is older than 24 hours
-        if last_modified_time < current_time - timedelta(days=1):
-            try:
-                # Run the snapshot.py script
-                with ThreadPoolExecutor() as executor:
-                    executor.submit(subprocess.run, ['python3', 'snapshot.py'], check=True)
-                logging.info("Snapshot taken successfully!")
+            if snapshot_time < current_time - timedelta(days=1):
+                try:
+                    # Run the snapshot.py script
+                    with ThreadPoolExecutor() as executor:
+                        executor.submit(subprocess.run, ['python3', 'snapshot.py'], check=True)
+                    logging.info("Snapshot taken successfully!")
+                    logging.info(f"Current time: {current_time}")
+                except subprocess.CalledProcessError as e:
+                    logging.error(f"Error running snapshot.py: {e}")
+            else:
+                logging.info(f"No snapshot taken. Last snapshot ({latest_file}) is less than 24 hours old.")
+                logging.info(f"Snapshot time: {snapshot_time}")
                 logging.info(f"Current time: {current_time}")
-            except subprocess.CalledProcessError as e:
-                logging.error(f"Error running snapshot.py: {e}")
-        else:
-            logging.info(f"No snapshot taken. Last snapshot ({last_file}) is less than 24 hours old.")
-            logging.info(f"Last modified time: {last_modified_time}")
-            logging.info(f"Current time: {current_time}")
     else:
         logging.info("No cleaned data files found.")
 
 # Schedule the check_and_take_snapshot function to run every hour
 def run_scheduler():
     while True:
+        print("Running scheduler...")
         check_and_take_snapshot()
         time.sleep(60 * 60)  # Sleep for 1 hour
 
