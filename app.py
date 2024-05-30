@@ -64,6 +64,8 @@ scheduler_thread = ThreadPoolExecutor().submit(run_scheduler)
 
 def generate_dataframes(data_dir):
     # Get all cleaned_data.json files in the data directory
+
+    print("Generating dataframes process started...")
     cleaned_data_files = glob.glob(os.path.join(data_dir, 'cleaned_data*.json'))
 
     # Print the cleaned data files
@@ -82,6 +84,7 @@ def generate_dataframes(data_dir):
         # Load the JSON data from the file
         with open(file) as f:
             data = json.load(f)
+            print('Json file loaded...')
 
         # Extract the data for each section
         coins_data = []
@@ -119,7 +122,8 @@ def generate_dataframes(data_dir):
             miner_data['name'] = miner
             miners_data.append(miner_data)
         miners = pd.concat([miners, pd.DataFrame(miners_data)], ignore_index=True)
-
+        
+    print("Dataframes generated successfully.")
     # Return the dataframes
     return coins, algos, gpu_brands, nvidia_models, amd_models, miners
 reports = {'Coins': 'coins', 'Algos': 'algos', 'GPU Brands': 'gpu_brands', 'NVIDIA Models': 'nvidia_models', 'AMD Models': 'amd_models', 'Miners': 'miners'}
@@ -157,6 +161,7 @@ def update_graph(report_value, dropdown_value):
         dff['snapshot'] = pd.to_datetime(dff['snapshot'])  # Convert 'snapshot' column to datetime
         dff = dff.groupby(pd.Grouper(key='snapshot', freq='D')).agg({'amount': 'mean'})
         figure = px.line(dff, x=dff.index, y='amount', markers=True, template='plotly_dark').update_layout(yaxis_title='%')
+        print('Graph updated successfully.')
 
         return figure
     else:
