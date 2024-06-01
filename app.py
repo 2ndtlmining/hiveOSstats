@@ -159,11 +159,16 @@ def update_graph(report_value, dropdown_value):
     if not dff.empty:
         dff = dff.copy()  # Create a new DataFrame copy
         dff['snapshot'] = pd.to_datetime(dff['snapshot'])  # Convert 'snapshot' column to datetime
+    # Fill in missing values using interpolation
+        dff = dff.set_index('snapshot').resample('D').interpolate().reset_index()
+    
         dff = dff.groupby(pd.Grouper(key='snapshot', freq='D')).agg({'amount': 'mean'})
         figure = px.line(dff, x=dff.index, y='amount', markers=True, template='plotly_dark').update_layout(yaxis_title='%')
         print('Graph updated successfully.')
 
         return figure
+    
+    
     else:
         return {}
 
