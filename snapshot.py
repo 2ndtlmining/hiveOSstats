@@ -40,8 +40,12 @@ async def clean_data(data):
             name = item["name"]
             amount = item["amount"]
 
+            # Skip if name is None or not a string
+            if not name or not isinstance(name, str):
+                continue
+
             # Remove special characters and Unicode characters from the name
-            clean_name = regex.sub(r'[^\w\s\p{L}]', '_', name, flags=regex.UNICODE)
+            clean_name = regex.sub(r'[^\w\s\p{L}]', '_', name)
 
             # Convert the cleaned name to uppercase
             clean_name = clean_name.upper()
@@ -66,32 +70,16 @@ async def clean_data(data):
     # Return the cleaned data dictionary
     return cleaned_data
 
-
-# Function to store the data in JSON format
 async def store_data(data, filename):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     month = datetime.now().strftime("%b").lower()  # Three-letter abbreviation of the month
     data_folder = "data"  # Specify the path to your data folder
-
-    # Check the current permissions of the data folder
-    current_permissions = os.stat(data_folder).st_mode
-    print(f"Current permissions of the data folder: {oct(current_permissions)}")
-
-    # Set the permissions of the data folder to read, write, and execute for the owner, read and execute for the group, and read and execute for others
-    new_permissions = 0o755
-    os.chmod(data_folder, new_permissions)
-    print(f"New permissions of the data folder: {oct(new_permissions)}")
-
-
-    # Create the data folder if it doesn't exist
     file_path = os.path.join(data_folder, f"{filename}_{month}_{timestamp}.json")
 
     os.makedirs(data_folder, exist_ok=True)  # Create the data folder if it doesn't exist
 
-    # Write the data to the JSON file
     with open(file_path, "w") as file:
         json.dump(data, file)
-        print(f"Data created: {file_path}")
 
 
 # Run the asynchronous functions
