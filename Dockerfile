@@ -1,28 +1,28 @@
-# Use an official Python runtime as a parent image
-FROM python:3.9-slim-buster
+FROM node:20-alpine AS base
 
-# Set the working directory
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
 
-# Copy data accross
-COPY . /app
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
 
-# Set the permissions of the /app folder
-RUN chmod -R 755 /app
-
-
-# Install necessary dependencies
-RUN apt-get update && \
-    apt-get install -y python3 python3-pip && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN pip3 install --no-cache-dir -r /app/requirements.txt
-
-# Expose a volume mount point at /app/data
-VOLUME /app
-
-# Expose port 8050
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/data ./data
+USER nextjs
 EXPOSE 8050
-
-# Set the command to run the application when the container starts
-CMD ["python3", "app.py"]
+ENV PORT=8050
+ENV HOSTNAME="0.0.0.0"
+CMD ["node", "server.js"]
