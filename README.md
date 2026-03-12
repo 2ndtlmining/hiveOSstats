@@ -18,7 +18,7 @@ This is a full rewrite of the original Python Dash application, rebuilt from the
 - **Explorer** -- Interactive exploration with category tabs, multi-select item filtering, line charts for time series data, and sortable data tables
 - **Trends** -- Pre-built stacked area charts for six key views: GPU Market Share, Top Coins, Mining Software Popularity, Top Algorithms, Top NVIDIA Models, and Top AMD Models
 - **Compare** -- Side-by-side comparison of any two items within a category, with diff tables showing value changes over time
-- **Snapshot System** -- Manual snapshots via API call and automated daily snapshots via Vercel cron (runs at 06:00 UTC); both raw and cleaned data are saved
+- **Snapshot System** -- Automatic daily snapshots via built-in scheduler (runs at 06:00 UTC when the app is running); manual snapshots available via API call or dashboard button; both raw and cleaned data are saved
 - **Excel Export** -- Four export types: full snapshot data, differences between snapshots, daily pivot tables, and monthly pivot tables
 - **Dark Theme** -- Styled with HiveOS brand colors (#FFB800 primary) on dark backgrounds
 - **Mobile Responsive** -- Collapsible sidebar navigation that adapts to mobile screen sizes
@@ -30,15 +30,16 @@ This is a full rewrite of the original Python Dash application, rebuilt from the
 
 | Technology | Purpose |
 |---|---|
-| [Next.js 16](https://nextjs.org/) | React framework with App Router and API routes |
+| [Next.js 15](https://nextjs.org/) | React framework with App Router and API routes |
 | [TypeScript](https://www.typescriptlang.org/) | Type-safe development |
-| [Tailwind CSS 4](https://tailwindcss.com/) | Utility-first styling |
+| [Tailwind CSS 3](https://tailwindcss.com/) | Utility-first styling |
 | [shadcn/ui](https://ui.shadcn.com/) | Pre-built accessible UI components |
 | [Recharts 3](https://recharts.org/) | Composable charting library |
 | [Framer Motion](https://www.framer.com/motion/) | Animation and transitions |
 | [next-themes](https://github.com/pacocoursey/next-themes) | Theme management |
 | [ExcelJS](https://github.com/exceljs/exceljs) | Excel file generation for data exports |
 | [Lucide React](https://lucide.dev/) | Icon library |
+| [node-cron](https://github.com/node-cron/node-cron) | Built-in snapshot scheduler |
 
 ---
 
@@ -142,6 +143,7 @@ src/
 │   ├── export.ts                     # Excel workbook generation (4 export types)
 │   ├── hiveos.ts                     # HiveOS API client and data cleaning
 │   └── utils.ts                      # Shared utility functions
+├── instrumentation.ts                # Built-in snapshot scheduler (node-cron, runs on server start)
 └── types/
     └── index.ts                      # TypeScript type definitions and category constants
 ```
@@ -170,7 +172,11 @@ Proxies a live request to the HiveOS public API and returns raw statistics.
 
 ### `GET|POST /api/cron/snapshot`
 
-Takes a new snapshot: fetches data from HiveOS, cleans it, and saves both raw and cleaned JSON files to the `data/` directory. This endpoint is called automatically by Vercel cron at 06:00 UTC daily.
+Takes a new snapshot: fetches data from HiveOS, cleans it, and saves both raw and cleaned JSON files to the `data/` directory.
+
+**Automatic scheduling:** When the app is running, a built-in scheduler (via `node-cron` in `src/instrumentation.ts`) automatically calls this logic daily at 06:00 UTC. No external cron job is needed for self-hosted deployments.
+
+**Manual trigger:** You can also call this endpoint directly or use the snapshot button on the dashboard.
 
 **Response:**
 ```json
@@ -245,28 +251,26 @@ Each cleaned snapshot is a JSON object keyed by category (`coins`, `algos`, `gpu
 
 ## Deployment
 
-### Vercel (Primary)
+### Self-Hosted (Primary)
 
-The project is configured for Vercel with automated daily snapshots.
+The app includes a built-in snapshot scheduler that runs automatically when the server starts. No external cron jobs needed.
+
+```bash
+npm run build
+npm start
+```
+
+On startup you will see: `[Snapshot] Scheduler started - daily snapshots at 06:00 UTC`
+
+The scheduler uses `node-cron` via the Next.js instrumentation hook (`src/instrumentation.ts`). Snapshots are saved to the `data/` directory.
+
+### Vercel
 
 1. Connect your GitHub repository to Vercel
 2. Set environment variables in the Vercel dashboard if needed
 3. Deploy -- Vercel will detect Next.js automatically
 
-The `vercel.json` configures a cron job that hits `/api/cron/snapshot` daily at 06:00 UTC:
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/snapshot",
-      "schedule": "0 6 * * *"
-    }
-  ]
-}
-```
-
-Note: Vercel cron jobs require a Pro or Enterprise plan.
+The `vercel.json` also configures a fallback cron job for Vercel deployments (requires Pro or Enterprise plan).
 
 ### Docker
 
