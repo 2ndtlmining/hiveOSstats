@@ -4,6 +4,11 @@ import type { CleanedSnapshot, CategoryKey, DataItem, TimeSeriesPoint } from "@/
 
 const DATA_DIR = path.join(process.cwd(), "data");
 
+// In-memory cache to avoid re-reading hundreds of JSON files on every request
+let snapshotCache: { files: string[]; data: CleanedSnapshot[] } | null = null;
+let cacheTime = 0;
+const CACHE_TTL = 60_000; // 1 minute
+
 export function getCleanedFiles(): string[] {
   if (!fs.existsSync(DATA_DIR)) return [];
   return fs
@@ -13,10 +18,22 @@ export function getCleanedFiles(): string[] {
 }
 
 export function readAllSnapshots(): CleanedSnapshot[] {
-  return getCleanedFiles().map((file) => {
+  const now = Date.now();
+  const files = getCleanedFiles();
+
+  // Return cache if files haven't changed and TTL hasn't expired
+  if (snapshotCache && now - cacheTime < CACHE_TTL && snapshotCache.files.length === files.length) {
+    return snapshotCache.data;
+  }
+
+  const data = files.map((file) => {
     const raw = fs.readFileSync(path.join(DATA_DIR, file), "utf-8");
     return JSON.parse(raw) as CleanedSnapshot;
   });
+
+  snapshotCache = { files, data };
+  cacheTime = now;
+  return data;
 }
 
 export function getCategoryData(category: CategoryKey): DataItem[] {
@@ -136,6 +153,7 @@ export function saveSnapshot(data: CleanedSnapshot): string {
   const filename = `cleaned_data_${month}_${ts}.json`;
 
   fs.writeFileSync(path.join(DATA_DIR, filename), JSON.stringify(data, null, 2));
+  snapshotCache = null; // Invalidate cache
   return filename;
 }
 
