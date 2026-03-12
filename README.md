@@ -57,14 +57,12 @@ cd hiveOSstats
 npm install
 ```
 
-**Note for Linux servers:** If you see a Tailwind CSS Oxide native binding error after `npm install`, delete `node_modules` and the lock file, then reinstall:
+**Note:** Linux platform binaries for Tailwind CSS are included as optional dependencies. If you still see an Oxide native binding error, try:
 
 ```bash
 rm -rf node_modules package-lock.json
 npm install
 ```
-
-This is a [known npm issue](https://github.com/npm/cli/issues/4828) with optional platform-specific dependencies.
 
 ### Environment Variables
 
