@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart } from "@/components/charts/line-chart";
+import { Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { CATEGORIES } from "@/types";
 import type { CategoryKey, TimeSeriesPoint } from "@/types";
 
@@ -18,7 +19,6 @@ export function CompareClient({ namesByCategory }: CompareClientProps) {
   const [loading, setLoading] = useState(false);
 
   const names = namesByCategory[category] ?? [];
-
   const selected = [itemA, itemB].filter(Boolean);
 
   const fetchData = useCallback(async () => {
@@ -37,6 +37,7 @@ export function CompareClient({ namesByCategory }: CompareClientProps) {
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, itemA, itemB]);
 
   useEffect(() => {
@@ -49,38 +50,41 @@ export function CompareClient({ namesByCategory }: CompareClientProps) {
     setItemB("");
   }
 
-  // Diff table
+  // Diff calculations
   const diffRows = selected.map((name) => {
-    if (chartData.length < 2) return { name, first: 0, last: 0, change: 0 };
+    if (chartData.length < 2) return { name, first: 0, last: 0, change: 0, pctChange: 0 };
     const first = (chartData[0][name] as number) ?? 0;
     const last = (chartData[chartData.length - 1][name] as number) ?? 0;
+    const change = Math.round((last - first) * 100) / 100;
+    const pctChange = first > 0 ? Math.round(((last - first) / first) * 10000) / 100 : 0;
     return {
       name,
       first: Math.round(first * 100) / 100,
       last: Math.round(last * 100) / 100,
-      change: Math.round((last - first) * 100) / 100,
+      change,
+      pctChange,
     };
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Compare</h1>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           Side-by-side comparison of two items in the same category.
         </p>
       </div>
 
       {/* Controls */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="grid gap-4 sm:grid-cols-3">
+        <CardContent className="pt-4 pb-4">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-muted-foreground">Category</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Category</label>
               <select
                 value={category}
                 onChange={(e) => handleCategoryChange(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-hiveos outline-none"
               >
                 {CATEGORIES.map((cat) => (
                   <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -88,11 +92,11 @@ export function CompareClient({ namesByCategory }: CompareClientProps) {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-muted-foreground">Item A</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Item A</label>
               <select
                 value={itemA}
                 onChange={(e) => setItemA(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-hiveos outline-none"
               >
                 <option value="">Select...</option>
                 {names.map((n) => (
@@ -101,11 +105,11 @@ export function CompareClient({ namesByCategory }: CompareClientProps) {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-muted-foreground">Item B</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Item B</label>
               <select
                 value={itemB}
                 onChange={(e) => setItemB(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-hiveos outline-none"
               >
                 <option value="">Select...</option>
                 {names.map((n) => (
@@ -119,46 +123,60 @@ export function CompareClient({ namesByCategory }: CompareClientProps) {
 
       {/* Chart */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Comparison Chart</CardTitle>
-          {loading && <span className="text-sm text-muted-foreground">Loading...</span>}
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base">Comparison Chart</CardTitle>
+          {loading && (
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Loading...
+            </div>
+          )}
         </CardHeader>
-        <CardContent>
-          <LineChart data={chartData} selectedNames={selected} />
+        <CardContent className="pb-4">
+          <LineChart data={chartData} selectedNames={selected} height={350} />
         </CardContent>
       </Card>
 
-      {/* Diff Table */}
+      {/* Change Summary Cards */}
       {diffRows.length > 0 && chartData.length >= 2 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Change Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="pb-2 text-left font-medium text-muted-foreground">Item</th>
-                  <th className="pb-2 text-right font-medium text-muted-foreground">First</th>
-                  <th className="pb-2 text-right font-medium text-muted-foreground">Last</th>
-                  <th className="pb-2 text-right font-medium text-muted-foreground">Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                {diffRows.map((row) => (
-                  <tr key={row.name} className="border-b border-border/50">
-                    <td className="py-2 font-medium">{row.name}</td>
-                    <td className="py-2 text-right">{row.first}%</td>
-                    <td className="py-2 text-right">{row.last}%</td>
-                    <td className={`py-2 text-right font-medium ${row.change >= 0 ? "text-success" : "text-danger"}`}>
-                      {row.change >= 0 ? "+" : ""}{row.change}%
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {diffRows.map((row) => {
+            const isPositive = row.change > 0;
+            const isNeutral = row.change === 0;
+            return (
+              <Card key={row.name}>
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-sm">{row.name}</h3>
+                    <div className={`flex items-center gap-1 text-sm font-medium ${
+                      isNeutral ? "text-muted-foreground" : isPositive ? "text-green-500" : "text-red-500"
+                    }`}>
+                      {isNeutral ? <Minus className="h-3 w-3" /> : isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                      {isPositive ? "+" : ""}{row.change}%
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">First</p>
+                      <p className="font-medium tabular-nums">{row.first}%</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Latest</p>
+                      <p className="font-medium tabular-nums">{row.last}%</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">% Change</p>
+                      <p className={`font-medium tabular-nums ${
+                        isNeutral ? "" : isPositive ? "text-green-500" : "text-red-500"
+                      }`}>
+                        {isPositive ? "+" : ""}{row.pctChange}%
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
     </div>
   );
