@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sparkline } from "@/components/charts/sparkline";
-import { Camera, Download, RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
+import { Download, RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
 
 interface StatCard {
   category: string;
@@ -35,27 +34,6 @@ export function DashboardClient({
   snapshotCount,
   latestTimestamp,
 }: DashboardClientProps) {
-  const [snapshotStatus, setSnapshotStatus] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function takeSnapshot() {
-    setLoading(true);
-    setSnapshotStatus(null);
-    try {
-      const res = await fetch("/api/cron/snapshot", { method: "POST" });
-      if (res.ok) {
-        setSnapshotStatus("Snapshot taken successfully!");
-        setTimeout(() => window.location.reload(), 1500);
-      } else {
-        setSnapshotStatus("Failed to take snapshot.");
-      }
-    } catch {
-      setSnapshotStatus("Error taking snapshot.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -70,10 +48,6 @@ export function DashboardClient({
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={takeSnapshot} disabled={loading} size="sm">
-            <Camera className="mr-2 h-4 w-4" />
-            {loading ? "Taking..." : "Take Snapshot"}
-          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -87,12 +61,6 @@ export function DashboardClient({
           </Button>
         </div>
       </div>
-
-      {snapshotStatus && (
-        <div className="rounded-lg border border-border bg-card p-3 text-sm">
-          {snapshotStatus}
-        </div>
-      )}
 
       {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

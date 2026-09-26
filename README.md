@@ -18,7 +18,7 @@ This is a full rewrite of the original Python Dash application, rebuilt from the
 - **Explorer** -- Interactive exploration with category tabs, multi-select item filtering, line charts for time series data, and sortable data tables
 - **Trends** -- Pre-built stacked area charts for six key views: GPU Market Share, Top Coins, Mining Software Popularity, Top Algorithms, Top NVIDIA Models, and Top AMD Models
 - **Compare** -- Side-by-side comparison of any two items within a category, with diff tables showing value changes over time
-- **Snapshot System** -- Automatic daily snapshots via built-in scheduler (runs at 06:00 UTC when the app is running); manual snapshots available via API call or dashboard button; both raw and cleaned data are saved
+- **Snapshot System** -- Automatic daily snapshots via a built-in scheduler (one per day after 06:00 UTC, with automatic catch-up and retry); authenticated manual snapshots via API; responses are validated before saving, and both raw and cleaned data are kept
 - **Excel Export** -- Four export types: full snapshot data, differences between snapshots, daily pivot tables, and monthly pivot tables
 - **Dark Theme** -- Styled with HiveOS brand colors (#FFB800 primary) on dark backgrounds
 - **Mobile Responsive** -- Collapsible sidebar navigation that adapts to mobile screen sizes
@@ -39,7 +39,6 @@ This is a full rewrite of the original Python Dash application, rebuilt from the
 | [next-themes](https://github.com/pacocoursey/next-themes) | Theme management |
 | [ExcelJS](https://github.com/exceljs/exceljs) | Excel file generation for data exports |
 | [Lucide React](https://lucide.dev/) | Icon library |
-| [node-cron](https://github.com/node-cron/node-cron) | Built-in snapshot scheduler |
 
 ---
 
@@ -78,7 +77,8 @@ Available variables:
 | Variable | Required | Description |
 |---|---|---|
 | `GITHUB_TOKEN` | No | GitHub token for committing snapshots to the repo |
-| `CRON_SECRET` | No | Secret for securing Vercel cron job endpoints |
+| `CRON_SECRET` | No | Enables `/api/cron/snapshot` for manual/external triggers (Bearer token). If unset, the endpoint is disabled; the built-in scheduler works either way |
+| `DATA_DIR` | No | Where snapshots are stored (default: `./data`) |
 
 ### Development
 
@@ -143,7 +143,7 @@ src/
 │   ├── export.ts                     # Excel workbook generation (4 export types)
 │   ├── hiveos.ts                     # HiveOS API client and data cleaning
 │   └── utils.ts                      # Shared utility functions
-├── instrumentation.ts                # Built-in snapshot scheduler (node-cron, runs on server start)
+├── instrumentation.ts                # Starts the built-in snapshot scheduler on server start
 └── types/
     └── index.ts                      # TypeScript type definitions and category constants
 ```
@@ -172,11 +172,23 @@ Proxies a live request to the HiveOS public API and returns raw statistics.
 
 ### `GET|POST /api/cron/snapshot`
 
-Takes a new snapshot: fetches data from HiveOS, cleans it, and saves both raw and cleaned JSON files to the `data/` directory.
+Takes a new snapshot: fetches data from HiveOS, validates it, cleans it, and saves both raw and cleaned JSON files to the `data/` directory.
 
-**Automatic scheduling:** When the app is running, a built-in scheduler (via `node-cron` in `src/instrumentation.ts`) automatically calls this logic daily at 06:00 UTC. No external cron job is needed for self-hosted deployments.
+**Automatic scheduling:** You normally never need this endpoint. When the app is running, the built-in scheduler (`src/instrumentation.ts` + `src/lib/snapshot.ts`) checks every 10 minutes whether a snapshot is due (none taken since the most recent 06:00 UTC) and takes one if so. Missed runs (restart, API outage) are caught up automatically.
 
-**Manual trigger:** You can also call this endpoint directly or use the snapshot button on the dashboard.
+**Manual trigger:** Requires `CRON_SECRET` to be set on the server:
+
+```bash
+curl -X POST -H "Authorization: Bearer $CRON_SECRET" http://localhost:8050/api/cron/snapshot
+```
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Snapshot saved |
+| 401 | Missing or wrong token |
+| 429 | A snapshot was taken less than 15 minutes ago |
+| 502 | HiveOS API failed or returned invalid data (invalid responses are kept as `rejected_raw_data_*.json`) |
+| 503 | `CRON_SECRET` not configured, so the endpoint is disabled |
 
 **Response:**
 ```json
@@ -260,9 +272,9 @@ npm run build
 npm start
 ```
 
-On startup you will see: `[Snapshot] Scheduler started - daily snapshots at 06:00 UTC`
+On startup you will see: `[Snapshot] Scheduler started - daily snapshot after 06:00 UTC, checked every 10 min`
 
-The scheduler uses `node-cron` via the Next.js instrumentation hook (`src/instrumentation.ts`). Snapshots are saved to the `data/` directory.
+The scheduler runs via the Next.js instrumentation hook (`src/instrumentation.ts`). Rather than firing at an exact time, it checks every 10 minutes (and 30 seconds after boot) whether a snapshot is due. A restart, a late timer, or a HiveOS outage just delays the snapshot until the next successful check instead of skipping the day. Watch for `[Snapshot]` lines in the logs (e.g. `journalctl -u <service> | grep Snapshot`). Snapshots are saved to the `data/` directory (override with `DATA_DIR`).
 
 ### Vercel
 
@@ -270,7 +282,7 @@ The scheduler uses `node-cron` via the Next.js instrumentation hook (`src/instru
 2. Set environment variables in the Vercel dashboard if needed
 3. Deploy -- Vercel will detect Next.js automatically
 
-The `vercel.json` also configures a fallback cron job for Vercel deployments (requires Pro or Enterprise plan).
+The `vercel.json` also configures a cron job for Vercel deployments (requires Pro or Enterprise plan). Set `CRON_SECRET` in Vercel; Vercel sends it as a Bearer token automatically.
 
 ### Docker
 
@@ -298,7 +310,7 @@ As an alternative to Vercel:
 3. Set the publish directory to `.next`
 4. Install the [Next.js runtime plugin](https://github.com/netlify/next-runtime) for full API route and SSR support
 
-Note: Netlify does not natively support Vercel-style cron jobs. You will need an external scheduler (such as GitHub Actions, cron-job.org, or a similar service) to trigger the `/api/cron/snapshot` endpoint on a schedule.
+Note: Netlify does not natively support Vercel-style cron jobs. You will need an external scheduler (such as GitHub Actions, cron-job.org, or a similar service) to trigger the `/api/cron/snapshot` endpoint on a schedule, sending `Authorization: Bearer $CRON_SECRET`.
 
 ---
 
@@ -310,7 +322,6 @@ Note: Netlify does not natively support Vercel-style cron jobs. You will need an
 - **Loading skeletons and error boundaries** -- Improved loading states and graceful error handling
 - **SEO metadata and Open Graph tags** -- Per-page metadata for better search engine indexing and social sharing
 - **Supabase migration path** -- Move from JSON file storage to Supabase for SQL querying, realtime subscriptions, and better scalability
-- **Authentication for admin actions** -- Protect snapshot-taking and other administrative endpoints
 - **Webhook notifications** -- Alerts on significant data changes (e.g., large market share shifts)
 - **Historical data backfill** -- Import data from additional sources to extend the timeline
 - **ISR (Incremental Static Regeneration)** -- Performance optimization for pages that do not need real-time data
