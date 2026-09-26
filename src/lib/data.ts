@@ -2,7 +2,9 @@ import fs from "fs";
 import path from "path";
 import type { CleanedSnapshot, CategoryKey, DataItem, TimeSeriesPoint } from "@/types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+function dataDir(): string {
+  return process.env.DATA_DIR ?? path.join(process.cwd(), "data");
+}
 
 // ─── Cache Layer ──────────────────────────────────────────────
 // All caches share a single TTL and invalidate together
@@ -24,27 +26,55 @@ function invalidateCache() {
 
 // ─── Core Data Functions ──────────────────────────────────────
 
+/**
+ * Parse the UTC time embedded in a snapshot filename,
+ * e.g. "cleaned_data_sep_2026-09-24_06-00-01.json" -> 2026-09-24T06:00:01Z.
+ */
+export function parseSnapshotTime(filename: string): Date | null {
+  const m = filename.match(/_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})\.json$/);
+  if (!m) return null;
+  const date = new Date(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function fileTime(filename: string): number {
+  return parseSnapshotTime(filename)?.getTime() ?? -Infinity;
+}
+
+/** Cleaned snapshot files, oldest first. Sorted by embedded timestamp: the
+ *  month prefix in the name ("sep", "oct") makes a plain string sort wrong. */
 export function getCleanedFiles(): string[] {
-  if (!fs.existsSync(DATA_DIR)) return [];
+  const dir = dataDir();
+  if (!fs.existsSync(dir)) return [];
   return fs
-    .readdirSync(DATA_DIR)
+    .readdirSync(dir)
     .filter((f) => f.startsWith("cleaned_data") && f.endsWith(".json"))
-    .sort();
+    .sort((a, b) => fileTime(a) - fileTime(b) || a.localeCompare(b));
+}
+
+export function getLatestSnapshotTime(): Date | null {
+  const files = getCleanedFiles();
+  return files.length > 0 ? parseSnapshotTime(files[files.length - 1]) : null;
 }
 
 export function readAllSnapshots(): CleanedSnapshot[] {
   const now = Date.now();
-  const fileCount = getCleanedFiles().length;
+  const files = getCleanedFiles();
+  const fileCount = files.length;
 
   if (snapshotCache && now - cacheTime < CACHE_TTL && fileCountCache === fileCount) {
     return snapshotCache;
   }
 
-  const files = getCleanedFiles();
-  const data = files.map((file) => {
-    const raw = fs.readFileSync(path.join(DATA_DIR, file), "utf-8");
-    return JSON.parse(raw) as CleanedSnapshot;
-  });
+  // Skip unreadable files so one corrupt snapshot can't take down every page
+  const data: CleanedSnapshot[] = [];
+  for (const file of files) {
+    try {
+      data.push(JSON.parse(fs.readFileSync(path.join(dataDir(), file), "utf-8")) as CleanedSnapshot);
+    } catch (err) {
+      console.error(`[Data] Skipping unreadable snapshot ${file}:`, (err as Error).message);
+    }
+  }
 
   snapshotCache = data;
   fileCountCache = fileCount;
@@ -233,18 +263,17 @@ export function getSparklineData(category: CategoryKey, name: string, maxPoints 
 // ─── Existing Helpers ─────────────────────────────────────────
 
 export function getLatestSnapshot(): { timestamp: string; data: CleanedSnapshot } | null {
-  const files = getCleanedFiles();
-  if (files.length === 0) return null;
-
-  // Use cached snapshots if available
   const snapshots = readAllSnapshots();
-  const data = snapshots[snapshots.length - 1];
 
-  const firstCat = Object.values(data)[0];
-  const firstItem = Object.values(firstCat)[0];
-  const timestamp = firstItem?.snapshot ?? "Unknown";
-
-  return { timestamp, data };
+  // Newest snapshot that actually contains items; the timestamp lives on each item
+  for (let i = snapshots.length - 1; i >= 0; i--) {
+    const data = snapshots[i];
+    for (const cat of Object.values(data ?? {})) {
+      const firstItem = cat ? Object.values(cat)[0] : undefined;
+      if (firstItem?.snapshot) return { timestamp: firstItem.snapshot, data };
+    }
+  }
+  return null;
 }
 
 export function getSnapshotCount(): number {
@@ -263,27 +292,36 @@ export function getTopItems(category: CategoryKey, limit = 10): DataItem[] {
     .slice(0, limit);
 }
 
-export function saveSnapshot(data: CleanedSnapshot): string {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+/**
+ * Write a timestamped snapshot file atomically: write to a temp file, then
+ * rename. A crash mid-write leaves a stray .tmp, never a truncated .json.
+ */
+function writeSnapshotFile(prefix: string, content: string): string {
+  const dir = dataDir();
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
   const now = new Date();
-  const month = now.toLocaleString("en-US", { month: "short" }).toLowerCase();
+  const month = now.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toLowerCase();
   const ts = now.toISOString().replace("T", "_").replace(/:/g, "-").slice(0, 19);
-  const filename = `cleaned_data_${month}_${ts}.json`;
+  const filename = `${prefix}_${month}_${ts}.json`;
+  const target = path.join(dir, filename);
 
-  fs.writeFileSync(path.join(DATA_DIR, filename), JSON.stringify(data, null, 2));
+  fs.writeFileSync(`${target}.tmp`, content);
+  fs.renameSync(`${target}.tmp`, target);
+  return filename;
+}
+
+export function saveSnapshot(data: CleanedSnapshot): string {
+  const filename = writeSnapshotFile("cleaned_data", JSON.stringify(data, null, 2));
   invalidateCache();
   return filename;
 }
 
 export function saveRawSnapshot(data: unknown): string {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  return writeSnapshotFile("raw_data", JSON.stringify(data));
+}
 
-  const now = new Date();
-  const month = now.toLocaleString("en-US", { month: "short" }).toLowerCase();
-  const ts = now.toISOString().replace("T", "_").replace(/:/g, "-").slice(0, 19);
-  const filename = `raw_data_${month}_${ts}.json`;
-
-  fs.writeFileSync(path.join(DATA_DIR, filename), JSON.stringify(data));
-  return filename;
+/** Keep an API response that failed validation, for debugging. Never read by the app. */
+export function saveRejectedRawSnapshot(data: unknown): string {
+  return writeSnapshotFile("rejected_raw_data", JSON.stringify(data));
 }

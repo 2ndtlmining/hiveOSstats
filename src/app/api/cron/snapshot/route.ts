@@ -1,28 +1,26 @@
-import { NextResponse } from "next/server";
-import { fetchFromApi, cleanData } from "@/lib/hiveos";
-import { saveSnapshot, saveRawSnapshot } from "@/lib/data";
+import { NextRequest, NextResponse } from "next/server";
+import { getLatestSnapshotTime } from "@/lib/data";
+import { checkManualSnapshotRequest, takeSnapshot } from "@/lib/snapshot";
 
-export async function GET() {
-  return handleSnapshot();
-}
-
-export async function POST() {
-  return handleSnapshot();
-}
-
-async function handleSnapshot() {
-  const raw = await fetchFromApi();
-  if (!raw) {
-    return NextResponse.json({ error: "Failed to fetch from HiveOS API" }, { status: 502 });
+// Manual/external snapshot trigger. Requires `Authorization: Bearer $CRON_SECRET`
+// (GET is accepted too, as Vercel Cron and most external schedulers use it).
+// Daily snapshots don't need this: the built-in scheduler in instrumentation.ts takes them.
+export async function POST(req: NextRequest) {
+  const rejection = checkManualSnapshotRequest({
+    authorization: req.headers.get("authorization"),
+    secret: process.env.CRON_SECRET,
+    latest: getLatestSnapshotTime(),
+  });
+  if (rejection) {
+    return NextResponse.json({ error: rejection.error }, { status: rejection.status });
   }
 
-  const rawFile = saveRawSnapshot(raw);
-  const cleaned = cleanData(raw);
-  const cleanedFile = saveSnapshot(cleaned);
-
-  return NextResponse.json({
-    success: true,
-    files: { raw: rawFile, cleaned: cleanedFile },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const files = await takeSnapshot();
+    return NextResponse.json({ success: true, files, timestamp: new Date().toISOString() });
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 502 });
+  }
 }
+
+export const GET = POST;
