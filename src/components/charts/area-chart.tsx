@@ -11,35 +11,13 @@ import {
   Legend,
 } from "recharts";
 import type { TimeSeriesPoint } from "@/types";
-
-const COLORS = ["#FFB800", "#22C55E", "#3B82F6", "#A855F7", "#EF4444", "#06B6D4", "#F97316", "#EC4899"];
+import { COLORS, downsample, formatDate, formatTooltipDate } from "./utils";
 
 interface AreaChartProps {
   data: TimeSeriesPoint[];
   selectedNames: string[];
   stacked?: boolean;
   height?: number;
-}
-
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { year: "2-digit", month: "short", day: "numeric" });
-}
-
-function formatTooltipDate(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
-
-function downsample(data: TimeSeriesPoint[], maxPoints: number): TimeSeriesPoint[] {
-  if (data.length <= maxPoints) return data;
-  const step = data.length / maxPoints;
-  const result: TimeSeriesPoint[] = [];
-  for (let i = 0; i < maxPoints - 1; i++) {
-    result.push(data[Math.round(i * step)]);
-  }
-  result.push(data[data.length - 1]);
-  return result;
 }
 
 export function AreaChart({ data, selectedNames, stacked = true, height = 400 }: AreaChartProps) {
@@ -51,7 +29,13 @@ export function AreaChart({ data, selectedNames, stacked = true, height = 400 }:
     );
   }
 
-  const chartData = downsample(data, 120);
+  // An item absent from a snapshot has no value that day. Stacking needs a
+  // number, so treat absent as 0% here; line charts show a gap instead.
+  const chartData = downsample(data, 120).map((point) => {
+    const filled: TimeSeriesPoint = { ...point };
+    for (const name of selectedNames) filled[name] ??= 0;
+    return filled;
+  });
 
   return (
     <ResponsiveContainer width="100%" height={height}>

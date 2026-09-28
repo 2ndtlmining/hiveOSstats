@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
-import type { CategoryKey, DataItem } from "@/types";
-import { getCategoryData, getTimeSeries, getUniqueNames } from "./data";
+import type { CategoryKey } from "@/types";
+import { getCategoryData, getSnapshotDiff, getTimeSeries, getUniqueNames } from "./data";
 import { CATEGORY_LABELS } from "@/types";
 
 const ALL_CATEGORIES: CategoryKey[] = [
@@ -30,27 +30,16 @@ export async function generateDiffExcel(): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
 
   for (const cat of ALL_CATEGORIES) {
-    const items = getCategoryData(cat);
+    const { previousDate, latestDate, rows } = getSnapshotDiff(cat);
     const sheet = workbook.addWorksheet(`${CATEGORY_LABELS[cat]} Diff`);
     sheet.columns = [
       { header: "Name", key: "name", width: 30 },
-      { header: "Difference", key: "diff", width: 15 },
+      { header: `Previous (%) ${previousDate ?? ""}`.trim(), key: "previous", width: 28 },
+      { header: `Latest (%) ${latestDate ?? ""}`.trim(), key: "latest", width: 28 },
+      { header: "Change (pp)", key: "change", width: 14 },
+      { header: "Status", key: "status", width: 10 },
     ];
-
-    // Group by name, sort by snapshot, get diff of last two
-    const byName: Record<string, DataItem[]> = {};
-    for (const item of items) {
-      if (!byName[item.name]) byName[item.name] = [];
-      byName[item.name].push(item);
-    }
-
-    for (const [name, records] of Object.entries(byName)) {
-      records.sort((a, b) => a.snapshot.localeCompare(b.snapshot));
-      const diff = records.length >= 2
-        ? records[records.length - 1].amount - records[records.length - 2].amount
-        : null;
-      sheet.addRow({ name, diff: diff !== null ? Math.round(diff * 100) / 100 : "N/A" });
-    }
+    sheet.addRows(rows);
   }
 
   return Buffer.from(await workbook.xlsx.writeBuffer());

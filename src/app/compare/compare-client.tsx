@@ -1,11 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LineChart } from "@/components/charts/line-chart";
 import { Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { CATEGORIES } from "@/types";
 import type { CategoryKey, TimeSeriesPoint } from "@/types";
+
+// Recharts is large; only load it once there's a chart to draw
+const LineChart = dynamic(
+  () => import("@/components/charts/line-chart").then((m) => m.LineChart),
+  { ssr: false, loading: () => <div className="h-[350px] animate-pulse rounded-md bg-muted/30" /> }
+);
 
 interface CompareClientProps {
   namesByCategory: Record<string, string[]>;
@@ -53,7 +59,9 @@ export function CompareClient({ namesByCategory }: CompareClientProps) {
   // Diff calculations
   const diffRows = selected.map((name) => {
     if (chartData.length < 2) return { name, first: 0, last: 0, change: 0, pctChange: 0 };
-    const first = (chartData[0][name] as number) ?? 0;
+    // Start from the item's first real value; it may have appeared after the
+    // first snapshot. An item missing from the latest snapshot is now at 0%.
+    const first = (chartData.find((p) => p[name] !== undefined)?.[name] as number) ?? 0;
     const last = (chartData[chartData.length - 1][name] as number) ?? 0;
     const change = Math.round((last - first) * 100) / 100;
     const pctChange = first > 0 ? Math.round(((last - first) / first) * 10000) / 100 : 0;
@@ -132,7 +140,13 @@ export function CompareClient({ namesByCategory }: CompareClientProps) {
           )}
         </CardHeader>
         <CardContent className="pb-4">
-          <LineChart data={chartData} selectedNames={selected} height={350} />
+          {selected.length > 0 ? (
+            <LineChart data={chartData} selectedNames={selected} height={350} />
+          ) : (
+            <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+              No data to display. Select items above.
+            </div>
+          )}
         </CardContent>
       </Card>
 

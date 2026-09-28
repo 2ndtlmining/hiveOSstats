@@ -35,7 +35,6 @@ This is a full rewrite of the original Python Dash application, rebuilt from the
 | [Tailwind CSS 3](https://tailwindcss.com/) | Utility-first styling |
 | [shadcn/ui](https://ui.shadcn.com/) | Pre-built accessible UI components |
 | [Recharts 3](https://recharts.org/) | Composable charting library |
-| [Framer Motion](https://www.framer.com/motion/) | Animation and transitions |
 | [next-themes](https://github.com/pacocoursey/next-themes) | Theme management |
 | [ExcelJS](https://github.com/exceljs/exceljs) | Excel file generation for data exports |
 | [Lucide React](https://lucide.dev/) | Icon library |
@@ -54,15 +53,10 @@ This is a full rewrite of the original Python Dash application, rebuilt from the
 ```bash
 git clone https://github.com/2ndtlmining/hiveOSstats.git
 cd hiveOSstats
-npm install
+npm ci
 ```
 
-**Note:** Linux platform binaries for Tailwind CSS are included as optional dependencies. If you still see an Oxide native binding error, try:
-
-```bash
-rm -rf node_modules package-lock.json
-npm install
-```
+`package-lock.json` is committed, so `npm ci` installs exactly the tested dependency versions on every machine. Node.js 20+ is required (see `.nvmrc`).
 
 ### Environment Variables
 
@@ -152,7 +146,8 @@ Additional project root files:
 
 ```
 data/                   # JSON snapshot storage directory
-vercel.json             # Vercel cron configuration
+deploy.sh               # Server deploy: backup data/, pull main, npm ci, build
+scripts/backup-data.sh  # Archive data/ (keeps the newest 30)
 Dockerfile              # Multi-stage Docker build
 next.config.ts          # Next.js configuration (standalone output)
 .env.example            # Environment variable template
@@ -231,9 +226,9 @@ Generates and downloads an Excel file.
 | `type` | `snapshot`, `diff`, `daily`, `monthly` | `snapshot` | Export type |
 
 - `snapshot` -- All data points across all snapshots, one sheet per category
-- `diff` -- Difference between the two most recent snapshots for each item
-- `daily` -- Pivot table with items as rows and dates as columns
-- `monthly` -- Pivot table with items as rows and months as columns (averaged)
+- `diff` -- Latest vs previous snapshot for every item in either one: both values, the change in percentage points, and whether the item is `new` or `dropped`. Sorted by size of change
+- `daily` -- Pivot table with items as rows and dates as columns. A cell is blank on days the item wasn't in HiveOS's stats
+- `monthly` -- Pivot table with items as rows and months as columns (average of the days the item was present)
 
 **Response:** `.xlsx` file download
 
@@ -276,13 +271,22 @@ On startup you will see: `[Snapshot] Scheduler started - daily snapshot after 06
 
 The scheduler runs via the Next.js instrumentation hook (`src/instrumentation.ts`). Rather than firing at an exact time, it checks every 10 minutes (and 30 seconds after boot) whether a snapshot is due. A restart, a late timer, or a HiveOS outage just delays the snapshot until the next successful check instead of skipping the day. Watch for `[Snapshot]` lines in the logs (e.g. `journalctl -u <service> | grep Snapshot`). Snapshots are saved to the `data/` directory (override with `DATA_DIR`).
 
-### Vercel
+### Updating the server
 
-1. Connect your GitHub repository to Vercel
-2. Set environment variables in the Vercel dashboard if needed
-3. Deploy -- Vercel will detect Next.js automatically
+`deploy.sh` backs up `data/`, pulls `main`, runs `npm ci` and builds. Restart the app afterwards.
 
-The `vercel.json` also configures a cron job for Vercel deployments (requires Pro or Enterprise plan). Set `CRON_SECRET` in Vercel; Vercel sends it as a Bearer token automatically.
+```bash
+./deploy.sh
+```
+
+Back up `data/` nightly as well; it is the only copy of the snapshot history:
+
+```bash
+# crontab -e
+30 6 * * * cd ~/hiveOSstats && scripts/backup-data.sh >> ~/hiveos-backup.log 2>&1
+```
+
+To restore, stop the app and extract an archive in the project directory: `tar xzf ../hiveOSstats-backups/data-<timestamp>.tar.gz`.
 
 ### Docker
 
@@ -293,9 +297,7 @@ docker build -t hiveos-stats .
 docker run -p 8050:8050 hiveos-stats
 ```
 
-The Docker image uses Node.js 20 Alpine, produces a standalone Next.js build, and exposes port 8050. The `data/` directory is copied into the container at build time.
-
-To persist snapshots across container restarts, mount the data directory as a volume:
+The Docker image uses Node.js 20 Alpine, produces a standalone Next.js build, and exposes port 8050. Snapshots are not baked into the image: mount the data directory as a volume so they persist:
 
 ```bash
 docker run -p 8050:8050 -v $(pwd)/data:/app/data hiveos-stats
@@ -303,21 +305,20 @@ docker run -p 8050:8050 -v $(pwd)/data:/app/data hiveos-stats
 
 ### Netlify
 
-As an alternative to Vercel:
+Netlify's (and Vercel's) filesystem is not persistent, so snapshots saved to `data/` are lost between deploys. Self-hosting or Docker with a volume is recommended.
 
 1. Connect your GitHub repository to Netlify
 2. Set the build command to `npm run build`
 3. Set the publish directory to `.next`
 4. Install the [Next.js runtime plugin](https://github.com/netlify/next-runtime) for full API route and SSR support
 
-Note: Netlify does not natively support Vercel-style cron jobs. You will need an external scheduler (such as GitHub Actions, cron-job.org, or a similar service) to trigger the `/api/cron/snapshot` endpoint on a schedule, sending `Authorization: Bearer $CRON_SECRET`.
+Note: Netlify does not run scheduled jobs for this app. You will need an external scheduler (such as GitHub Actions, cron-job.org, or a similar service) to trigger the `/api/cron/snapshot` endpoint on a schedule, sending `Authorization: Bearer $CRON_SECRET`.
 
 ---
 
 ## Future Improvements
 
 - **Dark/light theme toggle** -- User-selectable theme switching (infrastructure already in place via next-themes)
-- **Framer Motion page transitions** -- Animated route transitions and component entrance animations
 - **Time range picker** -- Filter charts by 7-day, 30-day, 90-day, or all-time windows
 - **Loading skeletons and error boundaries** -- Improved loading states and graceful error handling
 - **SEO metadata and Open Graph tags** -- Per-page metadata for better search engine indexing and social sharing
@@ -334,13 +335,11 @@ Note: Netlify does not natively support Vercel-style cron jobs. You will need an
 
 ## Legacy Python App
 
-The original Python Dash application files are retained in the repository root for reference:
+The original Python Dash application (`app.py`, `snapshot.py`, `excel_output.py`) has been removed from `main`. It is preserved at the `legacy-python` tag:
 
-- `app.py` -- Dash web application with Plotly charts
-- `snapshot.py` -- Data fetching and snapshot logic
-- `excel_output.py` -- Excel export generation
-
-These files are no longer actively maintained and are superseded by the Next.js implementation.
+```bash
+git checkout legacy-python
+```
 
 ---
 

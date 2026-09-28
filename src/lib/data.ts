@@ -125,52 +125,78 @@ export function getTimeSeries(
   const items = getCategoryData(category);
   const nameSet = new Set(selectedNames);
 
-  // Group by date
+  // Every day with a snapshot is on the timeline, even if no selected item is
+  // in it. An item missing from a day's snapshot has no value that day: it's
+  // left out rather than filled in, so charts and exports never show an item
+  // before it appeared or after it dropped out of HiveOS's stats.
   const byDate: Record<string, Record<string, number[]>> = {};
   for (const item of items) {
-    if (!nameSet.has(item.name)) continue;
     const date = item.snapshot.split(" ")[0];
     if (!byDate[date]) byDate[date] = {};
+    if (!nameSet.has(item.name)) continue;
     if (!byDate[date][item.name]) byDate[date][item.name] = [];
     byDate[date][item.name].push(item.amount);
   }
 
   // Aggregate: mean per day
-  const dates = Object.keys(byDate).sort();
-  const result: TimeSeriesPoint[] = [];
-
-  for (const date of dates) {
+  return Object.keys(byDate).sort().map((date) => {
     const point: TimeSeriesPoint = { date };
     for (const name of selectedNames) {
-      const vals = byDate[date]?.[name];
+      const vals = byDate[date][name];
       if (vals && vals.length > 0) {
         point[name] = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100;
       }
     }
-    result.push(point);
+    return point;
+  });
+}
+
+export interface SnapshotDiffRow {
+  name: string;
+  previous: number;
+  latest: number;
+  change: number;
+  status: "new" | "dropped" | "";
+}
+
+/**
+ * Change per item between the two newest snapshots that have data for this
+ * category. An item missing from one of them counts as 0 there. Sorted by size
+ * of change, largest first.
+ */
+export function getSnapshotDiff(category: CategoryKey): {
+  previousDate: string | null;
+  latestDate: string | null;
+  rows: SnapshotDiffRow[];
+} {
+  const withData = readAllSnapshots().filter(
+    (s) => s?.[category] && Object.keys(s[category]).length > 0
+  );
+  if (withData.length < 2) {
+    const only = withData[0]?.[category];
+    const latestDate = only ? Object.values(only)[0].snapshot : null;
+    return { previousDate: null, latestDate, rows: [] };
   }
 
-  // Forward fill then backward fill
-  for (const name of selectedNames) {
-    let lastVal: number | undefined;
-    for (const point of result) {
-      if (point[name] !== undefined) {
-        lastVal = point[name] as number;
-      } else if (lastVal !== undefined) {
-        point[name] = lastVal;
-      }
-    }
-    lastVal = undefined;
-    for (let i = result.length - 1; i >= 0; i--) {
-      if (result[i][name] !== undefined) {
-        lastVal = result[i][name] as number;
-      } else if (lastVal !== undefined) {
-        result[i][name] = lastVal;
-      }
-    }
-  }
+  const prev = Object.values(withData[withData.length - 2][category]);
+  const last = Object.values(withData[withData.length - 1][category]);
+  const prevByName = new Map(prev.map((i) => [i.name, i.amount]));
+  const lastByName = new Map(last.map((i) => [i.name, i.amount]));
+  const round = (n: number) => Math.round(n * 100) / 100;
 
-  return result;
+  const rows = [...new Set([...prevByName.keys(), ...lastByName.keys()])].map((name) => {
+    const previous = round(prevByName.get(name) ?? 0);
+    const latest = round(lastByName.get(name) ?? 0);
+    const status: SnapshotDiffRow["status"] = !prevByName.has(name)
+      ? "new"
+      : !lastByName.has(name)
+        ? "dropped"
+        : "";
+    return { name, previous, latest, change: round(latest - previous), status };
+  });
+  rows.sort((a, b) => Math.abs(b.change) - Math.abs(a.change) || a.name.localeCompare(b.name));
+
+  return { previousDate: prev[0].snapshot, latestDate: last[0].snapshot, rows };
 }
 
 // ─── Efficient Dashboard Helpers ──────────────────────────────

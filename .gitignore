@@ -47,8 +47,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Lock file - not tracked due to cross-platform native binary differences
-package-lock.json
+# Generated reports
+*.xlsx
 
 # Old nextjs-app directory
 /nextjs-app/

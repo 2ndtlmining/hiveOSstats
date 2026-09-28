@@ -11,36 +11,13 @@ import {
   Legend,
 } from "recharts";
 import type { TimeSeriesPoint } from "@/types";
-
-const COLORS = ["#FFB800", "#22C55E", "#3B82F6", "#A855F7", "#EF4444", "#06B6D4", "#F97316", "#EC4899"];
+import { COLORS, downsample, formatDate, formatTooltipDate } from "./utils";
 
 interface LineChartProps {
   data: TimeSeriesPoint[];
   selectedNames: string[];
   yLabel?: string;
   height?: number;
-}
-
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { year: "2-digit", month: "short", day: "numeric" });
-}
-
-function formatTooltipDate(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
-
-// Downsample data to avoid rendering too many points
-function downsample(data: TimeSeriesPoint[], maxPoints: number): TimeSeriesPoint[] {
-  if (data.length <= maxPoints) return data;
-  const step = data.length / maxPoints;
-  const result: TimeSeriesPoint[] = [];
-  for (let i = 0; i < maxPoints - 1; i++) {
-    result.push(data[Math.round(i * step)]);
-  }
-  result.push(data[data.length - 1]); // always include last point
-  return result;
 }
 
 export function LineChart({ data, selectedNames, yLabel = "%", height = 400 }: LineChartProps) {
