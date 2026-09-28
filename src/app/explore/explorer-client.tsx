@@ -1,14 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { LineChart } from "@/components/charts/line-chart";
 import { Loader2, X } from "lucide-react";
 import { CATEGORIES } from "@/types";
 import type { CategoryKey, TimeSeriesPoint } from "@/types";
+
+// Recharts is large; only load it once there's a chart to draw
+const LineChart = dynamic(
+  () => import("@/components/charts/line-chart").then((m) => m.LineChart),
+  { ssr: false, loading: () => <div className="h-[350px] animate-pulse rounded-md bg-muted/30" /> }
+);
 
 interface ExplorerClientProps {
   namesByCategory: Record<string, string[]>;
@@ -115,7 +121,13 @@ export function ExplorerClient({ namesByCategory }: ExplorerClientProps) {
           )}
         </CardHeader>
         <CardContent className="pb-4">
-          <LineChart data={chartData} selectedNames={selected} height={350} />
+          {selected.length > 0 ? (
+            <LineChart data={chartData} selectedNames={selected} height={350} />
+          ) : (
+            <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+              No data to display. Select items above.
+            </div>
+          )}
         </CardContent>
       </Card>
 
