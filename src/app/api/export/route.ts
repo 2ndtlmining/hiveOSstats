@@ -1,35 +1,35 @@
+import fs from "fs";
+import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
-import {
-  generateSnapshotExcel,
-  generateDiffExcel,
-  generateDailyPivotExcel,
-  generateMonthlyPivotExcel,
-} from "@/lib/export";
-
-const GENERATORS: Record<string, { fn: () => Promise<Buffer>; filename: string }> = {
-  snapshot: { fn: generateSnapshotExcel, filename: "snapshot_output.xlsx" },
-  diff: { fn: generateDiffExcel, filename: "differences_output.xlsx" },
-  daily: { fn: generateDailyPivotExcel, filename: "pivot_daily_output.xlsx" },
-  monthly: { fn: generateMonthlyPivotExcel, filename: "pivot_monthly_output.xlsx" },
-};
+import { EXPORT_TYPES, isExportType } from "@/lib/export-types";
+import { getExportFile } from "@/lib/export-cache";
 
 export async function GET(req: NextRequest) {
   const type = req.nextUrl.searchParams.get("type") ?? "snapshot";
-  const gen = GENERATORS[type];
-
-  if (!gen) {
+  if (!isExportType(type)) {
     return NextResponse.json(
-      { error: `Invalid type. Valid: ${Object.keys(GENERATORS).join(", ")}` },
+      { error: `Invalid type. Valid: ${Object.keys(EXPORT_TYPES).join(", ")}` },
       { status: 400 }
     );
   }
 
-  const buffer = await gen.fn();
+  let file;
+  try {
+    file = await getExportFile(type);
+  } catch (err) {
+    console.error(`[Export] ${type} failed:`, (err as Error).message);
+    return NextResponse.json({ error: "Export failed, please try again" }, { status: 500 });
+  }
 
-  return new NextResponse(new Uint8Array(buffer), {
+  const { size } = fs.statSync(file.path);
+  const body = Readable.toWeb(fs.createReadStream(file.path)) as ReadableStream<Uint8Array>;
+
+  return new NextResponse(body, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${gen.filename}"`,
+      "Content-Disposition": `attachment; filename="${file.filename}"`,
+      "Content-Length": String(size),
+      "Cache-Control": "no-cache",
     },
   });
 }
