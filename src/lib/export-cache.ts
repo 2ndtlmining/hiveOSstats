@@ -1,0 +1,98 @@
+import { once } from "events";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { getCleanedFiles } from "./data";
+import { writeExport } from "./export";
+import { EXPORT_TYPES, type ExportType } from "./export-types";
+
+/**
+ * Exports are generated once per data version and served from disk after
+ * that. The version is the newest snapshot file plus the file count, so a new
+ * snapshot (or a restored backup) produces fresh files.
+ */
+
+function cacheDir(): string {
+  return process.env.EXPORT_CACHE_DIR ?? path.join(os.tmpdir(), "hiveos-stats-exports");
+}
+
+function dataVersion(): string | null {
+  const files = getCleanedFiles();
+  if (files.length === 0) return null;
+  const newest = files[files.length - 1].replace(/^cleaned_data_/, "").replace(/\.json$/, "");
+  return `${newest}_${files.length}`;
+}
+
+/** e.g. "2026-09-28" from "sep_2026-09-28_06-01-42_838". */
+function versionDate(version: string): string {
+  return version.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? "latest";
+}
+
+export interface ExportFile {
+  path: string;
+  /** Download name, e.g. "hiveos-daily-pivot_2026-09-28.xlsx". */
+  filename: string;
+}
+
+const inFlight = new Map<string, Promise<ExportFile>>();
+
+/** The cached file for this export, generating it first if needed. */
+export function getExportFile(type: ExportType): Promise<ExportFile> {
+  const version = dataVersion();
+  if (!version) return Promise.reject(new Error("No snapshots available"));
+
+  const file: ExportFile = {
+    path: path.join(cacheDir(), `${type}_${version}.xlsx`),
+    filename: `hiveos-${EXPORT_TYPES[type].slug}_${versionDate(version)}.xlsx`,
+  };
+  if (fs.existsSync(file.path)) return Promise.resolve(file);
+
+  // Concurrent requests for the same file share one generation
+  const pending = inFlight.get(file.path);
+  if (pending) return pending;
+
+  const job = generate(type, file).finally(() => inFlight.delete(file.path));
+  inFlight.set(file.path, job);
+  return job;
+}
+
+async function generate(type: ExportType, file: ExportFile): Promise<ExportFile> {
+  fs.mkdirSync(path.dirname(file.path), { recursive: true });
+  const tmp = `${file.path}.${process.pid}.tmp`;
+  const started = Date.now();
+  const out = fs.createWriteStream(tmp);
+  const closed = once(out, "close");
+  try {
+    await writeExport(type, out);
+    await closed; // the file must be closed before it can be renamed on Windows
+    fs.renameSync(tmp, file.path);
+  } catch (err) {
+    out.destroy();
+    fs.rmSync(tmp, { force: true });
+    throw err;
+  }
+  console.log(`[Export] Generated ${path.basename(file.path)} in ${Date.now() - started} ms`);
+  removeOtherVersions(type, file.path);
+  return file;
+}
+
+function removeOtherVersions(type: ExportType, keep: string) {
+  const dir = path.dirname(keep);
+  for (const name of fs.readdirSync(dir)) {
+    const full = path.join(dir, name);
+    if (name.startsWith(`${type}_`) && name.endsWith(".xlsx") && full !== keep) {
+      fs.rmSync(full, { force: true });
+    }
+  }
+}
+
+/** Generate any export that's missing for the current data, one at a time. Never throws. */
+export async function warmExportCache(): Promise<void> {
+  for (const type of Object.keys(EXPORT_TYPES) as ExportType[]) {
+    try {
+      await getExportFile(type);
+    } catch (err) {
+      console.error(`[Export] Failed to pre-generate ${type}:`, (err as Error).message);
+    }
+  }
+}

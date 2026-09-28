@@ -73,6 +73,7 @@ Available variables:
 | `GITHUB_TOKEN` | No | GitHub token for committing snapshots to the repo |
 | `CRON_SECRET` | No | Enables `/api/cron/snapshot` for manual/external triggers (Bearer token). If unset, the endpoint is disabled; the built-in scheduler works either way |
 | `DATA_DIR` | No | Where snapshots are stored (default: `./data`) |
+| `EXPORT_CACHE_DIR` | No | Where generated Excel exports are cached (default: `<os tmp>/hiveos-stats-exports`). Safe to delete; files are regenerated |
 
 ### Development
 
@@ -217,7 +218,7 @@ Queries historical snapshot data from stored JSON files.
 
 ### `GET /api/export`
 
-Generates and downloads an Excel file.
+Downloads an Excel report. Each report is generated once per snapshot, cached on disk and streamed from there, so downloads are near-instant. The scheduler pre-generates all four after each new snapshot. Generation uses ExcelJS's streaming writer and yields to the event loop regularly, so it never freezes the rest of the site.
 
 **Query Parameters:**
 
@@ -230,7 +231,9 @@ Generates and downloads an Excel file.
 - `daily` -- Pivot table with items as rows and dates as columns. A cell is blank on days the item wasn't in HiveOS's stats
 - `monthly` -- Pivot table with items as rows and months as columns (average of the days the item was present)
 
-**Response:** `.xlsx` file download
+Every workbook has frozen, filterable header rows, real Excel dates (so PivotTables can group by month or quarter), amounts rounded to 2 decimals, and an **About** sheet with the snapshot date and generation time. Pivot rows list the items in the latest snapshot first, largest share first.
+
+**Response:** `.xlsx` file download, named e.g. `hiveos-daily-pivot_2026-09-28.xlsx`
 
 ---
 

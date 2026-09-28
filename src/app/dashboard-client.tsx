@@ -2,8 +2,10 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Sparkline } from "@/components/charts/sparkline";
+import { ExportButton } from "@/components/export-button";
+import { EXPORT_TYPES, type ExportType } from "@/lib/export-types";
 import { Download, RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
 
 interface StatCard {
@@ -48,14 +50,10 @@ export function DashboardClient({
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.open("/api/export?type=snapshot", "_blank")}
-          >
+          <a href="#excel-reports" className={buttonVariants({ variant: "outline", size: "sm" })}>
             <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
+            Excel reports
+          </a>
           <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -131,27 +129,17 @@ export function DashboardClient({
       )}
 
       {/* Export Options */}
-      <Card>
+      <Card id="excel-reports" className="scroll-mt-6">
         <CardHeader>
           <CardTitle>Excel Reports</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { type: "snapshot", label: "Snapshot Data" },
-              { type: "diff", label: "Differences" },
-              { type: "daily", label: "Daily Pivot" },
-              { type: "monthly", label: "Monthly Pivot" },
-            ].map((exp) => (
-              <Button
-                key={exp.type}
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(`/api/export?type=${exp.type}`, "_blank")}
-              >
-                <Download className="mr-2 h-4 w-4" />
-                {exp.label}
-              </Button>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(Object.keys(EXPORT_TYPES) as ExportType[]).map((type) => (
+              <div key={type} className="flex flex-col items-start gap-2">
+                <ExportButton type={type} />
+                <p className="text-xs text-muted-foreground">{EXPORT_TYPES[type].description}</p>
+              </div>
             ))}
           </div>
         </CardContent>

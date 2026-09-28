@@ -11,11 +11,14 @@ export async function register() {
   g.__hiveSnapshotScheduler = true;
 
   const { runScheduledSnapshot, DAILY_SNAPSHOT_HOUR_UTC } = await import("@/lib/snapshot");
+  const { warmExportCache } = await import("@/lib/export-cache");
 
   // Rather than firing at an exact time (node-cron skipped the whole day if its
   // timer fired even a second late), check regularly whether a snapshot is due.
   // This also catches up after restarts and retries failed fetches.
-  const check = () => void runScheduledSnapshot();
+  // Then pre-generate any Excel export that's missing for the current data,
+  // so downloads are served from disk straight away.
+  const check = () => void runScheduledSnapshot().then(warmExportCache);
   setTimeout(check, STARTUP_DELAY_MS);
   setInterval(check, CHECK_INTERVAL_MS);
 
