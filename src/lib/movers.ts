@@ -1,6 +1,7 @@
 import type { CategoryKey } from "@/types";
 import { CATEGORY_LABELS } from "@/types";
 import { getCategorySeries } from "./data";
+import { getDisplayNames } from "./labels";
 import { MOVER_WINDOWS, type Mover, type MoverWindow } from "./movers-types";
 
 export { DEFAULT_MOVER_WINDOW, isMoverWindow, MOVER_WINDOWS } from "./movers-types";
@@ -63,6 +64,7 @@ export function getMovers(
 
       movers.push({
         name,
+        label: name,
         category,
         categoryLabel: CATEGORY_LABELS[category],
         start: round2(start),
@@ -72,6 +74,12 @@ export function getMovers(
         spark,
       });
     }
+  }
+
+  for (const category of new Set(movers.map((m) => m.category))) {
+    const ofCategory = movers.filter((m) => m.category === category);
+    const names = getDisplayNames(category, ofCategory.map((m) => m.name));
+    for (const m of ofCategory) m.label = names[m.name] ?? m.name;
   }
 
   const gainers = movers.filter((m) => m.change > 0).sort((a, b) => b.change - a.change);

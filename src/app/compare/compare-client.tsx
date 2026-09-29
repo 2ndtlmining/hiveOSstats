@@ -59,7 +59,7 @@ function ItemSelect({
         <optgroup label="In the latest snapshot">
           {active.map((i) => (
             <option key={i.name} value={i.name}>
-              {i.name} ({i.current}%)
+              {i.label ?? i.name} ({i.current}%)
             </option>
           ))}
         </optgroup>
@@ -67,7 +67,7 @@ function ItemSelect({
           <optgroup label="No longer in HiveOS's stats">
             {historical.map((i) => (
               <option key={i.name} value={i.name}>
-                {i.name} (last seen {i.lastSeen})
+                {i.label ?? i.name} (last seen {i.lastSeen})
               </option>
             ))}
           </optgroup>
@@ -195,7 +195,7 @@ export function CompareClient({ initialCategory, initialA, initialB, initialRang
             <div className="h-[350px] animate-pulse rounded-md bg-muted/30" aria-label="Loading chart" />
           ) : (
             <div className={cn("transition-opacity", series.loading && "opacity-50")}>
-              <LineChart data={points} selectedNames={selected} height={350} />
+              <LineChart data={points} selectedNames={selected} labels={series.data?.labels} height={350} />
             </div>
           )}
         </CardContent>
@@ -213,7 +213,7 @@ export function CompareClient({ initialCategory, initialA, initialB, initialRang
               <Card key={row.name}>
                 <CardContent className="pb-4 pt-4">
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">{row.name}</h3>
+                    <h3 className="text-sm font-semibold">{series.data?.labels[row.name] ?? row.name}</h3>
                     <div className={cn("flex items-center gap-1 text-sm font-medium", tone)}>
                       <Icon className="h-3 w-3" aria-hidden />
                       {isPositive ? "+" : ""}

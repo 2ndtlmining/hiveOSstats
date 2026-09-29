@@ -1,5 +1,6 @@
 import { getLatestSnapshot, getLatestSnapshotTime, getRecentValues, getSnapshotCount } from "@/lib/data";
 import { dataAgeHours, formatAge, formatUtc } from "@/lib/health";
+import { displayName } from "@/lib/labels";
 import { DEFAULT_MOVER_WINDOW, getMovers, isMoverWindow } from "@/lib/movers";
 import type { CategoryKey } from "@/types";
 import { CATEGORY_LABELS } from "@/types";
@@ -26,7 +27,9 @@ export default async function DashboardPage({
       category: cat,
       label: CATEGORY_LABELS[cat],
       count: items.length,
-      topItem: topItem ? { name: topItem.name, amount: Math.round(topItem.amount * 100) / 100 } : null,
+      topItem: topItem
+        ? { name: topItem.name, label: displayName(cat, topItem.name), amount: Math.round(topItem.amount * 100) / 100 }
+        : null,
       sparkData: topItem ? getRecentValues(cat, topItem.name) : [],
     };
   });

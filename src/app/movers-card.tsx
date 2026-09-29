@@ -28,7 +28,7 @@ function MoverRow({ mover, window }: { mover: Mover; window: MoverWindow }) {
       className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40"
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">{mover.name}</p>
+        <p className="truncate font-medium">{mover.label}</p>
         <p className="text-xs text-muted-foreground">
           {mover.categoryLabel} · {mover.start}% → {mover.end}%
         </p>

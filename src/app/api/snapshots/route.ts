@@ -8,6 +8,7 @@ import {
   getItemCatalog,
   getUniqueNames,
 } from "@/lib/data";
+import { withLabels } from "@/lib/labels";
 import { getRangedSeries } from "@/lib/series";
 import { parseSnapshotsQuery } from "@/lib/snapshots-query";
 
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
     case "names":
       return json(req, getUniqueNames(query.category), headers);
     case "catalog":
-      return json(req, getItemCatalog(query.category), headers);
+      return json(req, withLabels(query.category, getItemCatalog(query.category)), headers);
     case "series":
       return json(req, getRangedSeries(query.category, query.names, query.range), headers);
   }

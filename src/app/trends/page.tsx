@@ -28,7 +28,7 @@ export default async function TrendsPage({ searchParams }: { searchParams: Promi
   const views = VIEWS.map(({ title, category }) => {
     const names = getTopItems(category, 10).map((i) => i.name);
     const series = getRangedSeries(category, names, range);
-    return { title, names, resolution: series.resolution, data: toColumns(series.points, names) };
+    return { title, names, labels: series.labels, resolution: series.resolution, data: toColumns(series.points, names) };
   });
 
   return <TrendsClient views={views} range={range} defaultRange={TRENDS_DEFAULT_RANGE} />;

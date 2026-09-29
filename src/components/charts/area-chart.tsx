@@ -16,11 +16,13 @@ import { COLORS, downsample, formatDate, formatTooltipDate } from "./utils";
 interface AreaChartProps {
   data: TimeSeriesPoint[];
   selectedNames: string[];
+  /** Readable names for the legend and tooltip, by series name. */
+  labels?: Record<string, string>;
   stacked?: boolean;
   height?: number;
 }
 
-export function AreaChart({ data, selectedNames, stacked = true, height = 400 }: AreaChartProps) {
+export function AreaChart({ data, selectedNames, labels, stacked = true, height = 400 }: AreaChartProps) {
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center text-muted-foreground" style={{ height }}>
@@ -85,6 +87,7 @@ export function AreaChart({ data, selectedNames, stacked = true, height = 400 }:
             key={name}
             type="monotone"
             dataKey={name}
+            name={labels?.[name] ?? name}
             stackId={stacked ? "1" : undefined}
             stroke={COLORS[i % COLORS.length]}
             fill={`url(#gradient-${i})`}

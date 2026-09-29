@@ -1,4 +1,5 @@
 import { getItemCatalog } from "@/lib/data";
+import { withLabels } from "@/lib/labels";
 import { parseViewParams } from "@/lib/view-params";
 import { CompareClient } from "./compare-client";
 
@@ -10,7 +11,7 @@ export default async function ComparePage({
   searchParams: Promise<{ cat?: string; a?: string; b?: string; range?: string }>;
 }) {
   const params = await searchParams;
-  const { category, range, catalog, pickNames } = parseViewParams(params, getItemCatalog);
+  const { category, range, catalog, pickNames } = parseViewParams(params, (cat) => withLabels(cat, getItemCatalog(cat)));
 
   return (
     <CompareClient

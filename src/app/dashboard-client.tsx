@@ -16,7 +16,7 @@ interface StatCard {
   category: CategoryKey;
   label: string;
   count: number;
-  topItem: { name: string; amount: number } | null;
+  topItem: { name: string; label: string; amount: number } | null;
   sparkData: { value: number }[];
 }
 
@@ -75,7 +75,7 @@ export function DashboardClient({
               <CardContent>
                 {stat.topItem ? (
                   <>
-                    <p className="text-lg font-semibold">{stat.topItem.name}</p>
+                    <p className="text-lg font-semibold">{stat.topItem.label}</p>
                     <p className="text-sm text-hiveos">{stat.topItem.amount}%</p>
                     {stat.sparkData.length > 1 && (
                       <div className="mt-2">

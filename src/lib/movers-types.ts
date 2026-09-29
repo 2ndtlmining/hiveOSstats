@@ -12,6 +12,8 @@ export function isMoverWindow(value: unknown): value is MoverWindow {
 
 export interface Mover {
   name: string;
+  /** Readable name (original HiveOS spelling). */
+  label: string;
   category: CategoryKey;
   categoryLabel: string;
   /** Share at the start and end of the window, in percent (3-day averages). */

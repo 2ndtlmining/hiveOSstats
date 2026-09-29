@@ -9,6 +9,7 @@ import type { Range } from "@/lib/ranges";
 interface TrendView {
   title: string;
   names: string[];
+  labels: Record<string, string>;
   resolution: "daily" | "weekly";
   data: ColumnarSeries;
 }
@@ -40,7 +41,7 @@ export function TrendsClient({ views, range, defaultRange }: TrendsClientProps) 
             <CardTitle>{view.title}</CardTitle>
           </CardHeader>
           <CardContent>
-            <AreaChart data={fromColumns(view.data)} selectedNames={view.names} stacked />
+            <AreaChart data={fromColumns(view.data)} selectedNames={view.names} labels={view.labels} stacked />
           </CardContent>
         </Card>
       ))}

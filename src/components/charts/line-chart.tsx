@@ -16,11 +16,13 @@ import { COLORS, downsample, formatDate, formatTooltipDate } from "./utils";
 interface LineChartProps {
   data: TimeSeriesPoint[];
   selectedNames: string[];
+  /** Readable names for the legend and tooltip, by series name. */
+  labels?: Record<string, string>;
   yLabel?: string;
   height?: number;
 }
 
-export function LineChart({ data, selectedNames, yLabel = "%", height = 400 }: LineChartProps) {
+export function LineChart({ data, selectedNames, labels, yLabel = "%", height = 400 }: LineChartProps) {
   if (data.length === 0) {
     return (
       <div className={`flex items-center justify-center text-muted-foreground`} style={{ height }}>
@@ -71,6 +73,7 @@ export function LineChart({ data, selectedNames, yLabel = "%", height = 400 }: L
             key={name}
             type="monotone"
             dataKey={name}
+            name={labels?.[name] ?? name}
             stroke={COLORS[i % COLORS.length]}
             strokeWidth={2}
             dot={false}
