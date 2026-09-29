@@ -29,7 +29,7 @@ export function LineChart({ data, selectedNames, yLabel = "%", height = 400 }: L
     );
   }
 
-  const chartData = downsample(data, 120);
+  const chartData = downsample(data, 400);
 
   return (
     <ResponsiveContainer width="100%" height={height}>

@@ -17,6 +17,7 @@ let loaded: { version: string; snapshots: CleanedSnapshot[] } = { version: "", s
 
 const categoryDataCache = new Map<CategoryKey, DataItem[]>();
 const seriesCache = new Map<CategoryKey, CategorySeries>();
+const catalogCache = new Map<CategoryKey, CatalogItem[]>();
 
 // ─── Core Data Functions ──────────────────────────────────────
 
@@ -85,6 +86,7 @@ export function readAllSnapshots(): CleanedSnapshot[] {
   loaded = { version, snapshots };
   categoryDataCache.clear();
   seriesCache.clear();
+  catalogCache.clear();
   return snapshots;
 }
 
@@ -170,20 +172,72 @@ export function getUniqueNames(category: CategoryKey): string[] {
  */
 export function getTimeSeries(
   category: CategoryKey,
-  selectedNames: string[]
+  selectedNames: string[],
+  { from }: { from?: string | null } = {}
 ): TimeSeriesPoint[] {
   const { dates, values } = getCategorySeries(category);
+  const start = from ? dates.findIndex((d) => d >= from) : 0;
+  if (start < 0) return [];
   const columns = selectedNames
     .map((name) => [name, values.get(name)] as const)
     .filter((c): c is readonly [string, Float64Array] => c[1] !== undefined);
 
-  return dates.map((date, i) => {
+  return dates.slice(start).map((date, offset) => {
+    const i = start + offset;
     const point: TimeSeriesPoint = { date };
     for (const [name, column] of columns) {
       if (!Number.isNaN(column[i])) point[name] = column[i];
     }
     return point;
   });
+}
+
+export interface CatalogItem {
+  name: string;
+  /** Share in the latest snapshot, or null if the item has dropped out. */
+  current: number | null;
+  /** Last day the item was in HiveOS's stats. */
+  lastSeen: string;
+  /** Highest daily share ever. */
+  peak: number;
+}
+
+/**
+ * Every item ever seen in a category: active items first (largest current
+ * share first), then items that have dropped out (most recently seen first).
+ */
+export function getItemCatalog(category: CategoryKey): CatalogItem[] {
+  const { dates, values } = getCategorySeries(category);
+  const cached = catalogCache.get(category);
+  if (cached) return cached;
+
+  const last = dates.length - 1;
+  const items: CatalogItem[] = [];
+  for (const [name, column] of values) {
+    let lastIndex = -1;
+    let peak = 0;
+    for (let i = 0; i < column.length; i++) {
+      if (Number.isNaN(column[i])) continue;
+      lastIndex = i;
+      if (column[i] > peak) peak = column[i];
+    }
+    if (lastIndex < 0) continue;
+    items.push({
+      name,
+      current: lastIndex === last ? column[last] : null,
+      lastSeen: dates[lastIndex],
+      peak,
+    });
+  }
+  items.sort((a, b) => {
+    if (a.current !== null && b.current !== null) return b.current - a.current || a.name.localeCompare(b.name);
+    if (a.current !== null) return -1;
+    if (b.current !== null) return 1;
+    return b.lastSeen.localeCompare(a.lastSeen) || b.peak - a.peak;
+  });
+
+  catalogCache.set(category, items);
+  return items;
 }
 
 export interface SnapshotDiffRow {
