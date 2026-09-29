@@ -187,3 +187,41 @@ describe("incremental loading", () => {
     read.mockRestore();
   });
 });
+
+describe("item catalog", () => {
+  it("lists active items by current share, then dropped items by last seen", () => {
+    writeCoins("2026-01-01", { GONE_EARLY: 9, GONE_LATE: 1, A: 5 });
+    writeCoins("2026-01-02", { GONE_LATE: 2, A: 5, B: 7 });
+    writeCoins("2026-01-03", { A: 6, B: 3 });
+    expect(data.getItemCatalog("coins")).toEqual([
+      { name: "A", current: 6, lastSeen: "2026-01-03", peak: 6 },
+      { name: "B", current: 3, lastSeen: "2026-01-03", peak: 7 },
+      { name: "GONE_LATE", current: null, lastSeen: "2026-01-02", peak: 2 },
+      { name: "GONE_EARLY", current: null, lastSeen: "2026-01-01", peak: 9 },
+    ]);
+  });
+});
+
+describe("ranged series", () => {
+  it("counts the range back from the latest snapshot, not from today", async () => {
+    for (let i = 0; i < 100; i++) {
+      writeCoins(new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10), { A: i });
+    }
+    const { getRangedSeries } = await import("../series");
+    const r = getRangedSeries("coins", ["A"], "30d");
+    expect(r).toMatchObject({ resolution: "daily", from: "2025-03-11", to: "2025-04-10" });
+    expect(r.points).toHaveLength(31);
+    expect(getRangedSeries("coins", ["A"], "all").points).toHaveLength(100);
+  });
+
+  it("switches to weekly means for more than 400 days", async () => {
+    for (let i = 0; i < 420; i++) {
+      writeCoins(new Date(Date.UTC(2024, 0, 1 + i)).toISOString().slice(0, 10), { A: 1 });
+    }
+    const { getRangedSeries } = await import("../series");
+    const all = getRangedSeries("coins", ["A"], "all");
+    expect(all.resolution).toBe("weekly");
+    expect(all.points.length).toBeLessThan(62);
+    expect(getRangedSeries("coins", ["A"], "1y").resolution).toBe("daily");
+  });
+});

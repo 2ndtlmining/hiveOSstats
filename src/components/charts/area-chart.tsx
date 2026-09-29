@@ -31,7 +31,7 @@ export function AreaChart({ data, selectedNames, stacked = true, height = 400 }:
 
   // An item absent from a snapshot has no value that day. Stacking needs a
   // number, so treat absent as 0% here; line charts show a gap instead.
-  const chartData = downsample(data, 120).map((point) => {
+  const chartData = downsample(data, 400).map((point) => {
     const filled: TimeSeriesPoint = { ...point };
     for (const name of selectedNames) filled[name] ??= 0;
     return filled;

@@ -1,15 +1,24 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { Loader2, X } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, X } from "lucide-react";
-import { CATEGORIES } from "@/types";
-import type { CategoryKey, TimeSeriesPoint } from "@/types";
+import { ChartEmpty, ChartError } from "@/components/chart-status";
+import { CopyLinkButton } from "@/components/copy-link-button";
+import { RangePicker } from "@/components/range-picker";
+import { useApi } from "@/hooks/use-api";
+import { useCatalog } from "@/hooks/use-catalog";
+import { cn } from "@/lib/utils";
+import type { CatalogItem } from "@/lib/data";
+import type { RangedSeries } from "@/lib/series";
+import { DEFAULT_RANGE, type Range } from "@/lib/ranges";
 import { MAX_SERIES_NAMES } from "@/lib/snapshots-query";
+import { replaceQuery } from "@/lib/url-state";
+import { CATEGORIES } from "@/types";
+import type { CategoryKey } from "@/types";
 
 // Recharts is large; only load it once there's a chart to draw
 const LineChart = dynamic(
@@ -18,43 +27,34 @@ const LineChart = dynamic(
 );
 
 interface ExplorerClientProps {
-  namesByCategory: Record<string, string[]>;
+  initialCategory: CategoryKey;
+  initialItems: string[];
+  initialRange: Range;
+  initialCatalog: CatalogItem[];
 }
 
-export function ExplorerClient({ namesByCategory }: ExplorerClientProps) {
-  const [category, setCategory] = useState<CategoryKey>("coins");
-  const [selected, setSelected] = useState<string[]>([]);
-  const [chartData, setChartData] = useState<TimeSeriesPoint[]>([]);
-  const [loading, setLoading] = useState(false);
+export function ExplorerClient({ initialCategory, initialItems, initialRange, initialCatalog }: ExplorerClientProps) {
+  const [category, setCategory] = useState<CategoryKey>(initialCategory);
+  const [selected, setSelected] = useState<string[]>(initialItems);
+  const [range, setRange] = useState<Range>(initialRange);
   const [search, setSearch] = useState("");
+  const [showHistorical, setShowHistorical] = useState(false);
 
-  const names = namesByCategory[category] ?? [];
-  const filtered = search
-    ? names.filter((n) => n.toLowerCase().includes(search.toLowerCase()))
-    : names;
+  const catalog = useCatalog(category, initialCategory, initialCatalog);
+  const seriesUrl =
+    selected.length > 0
+      ? `/api/snapshots?${new URLSearchParams({ category, names: selected.join(","), range })}`
+      : null;
+  const series = useApi<RangedSeries>(seriesUrl);
 
-  const fetchChart = useCallback(async () => {
-    if (selected.length === 0) {
-      setChartData([]);
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/snapshots?category=${category}&names=${encodeURIComponent(selected.join(","))}`
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setChartData(await res.json());
-    } catch {
-      setChartData([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [category, selected]);
-
+  // Keep the URL in sync so the view survives a refresh and can be shared
   useEffect(() => {
-    fetchChart();
-  }, [fetchChart]);
+    replaceQuery({
+      cat: category,
+      items: selected.join(",") || null,
+      range: range === DEFAULT_RANGE ? null : range,
+    });
+  }, [category, selected, range]);
 
   function toggleItem(name: string) {
     setSelected((prev) =>
@@ -70,20 +70,31 @@ export function ExplorerClient({ namesByCategory }: ExplorerClientProps) {
     setCategory(val as CategoryKey);
     setSelected([]);
     setSearch("");
+    setShowHistorical(false);
   }
+
+  const categoryLabel = CATEGORIES.find((c) => c.value === category)?.label;
+  const points = series.data?.points ?? [];
+  const weekly = series.data?.resolution === "weekly";
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Explorer</h1>
-        <p className="text-muted-foreground text-sm">
-          Select a category and items to visualize trends over time.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Explorer</h1>
+          <p className="text-sm text-muted-foreground">
+            Select a category and items to visualize trends over time.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <RangePicker value={range} onChange={setRange} />
+          <CopyLinkButton />
+        </div>
       </div>
 
       {/* Category Tabs */}
       <Tabs value={category} onValueChange={handleCategoryChange}>
-        <TabsList className="flex flex-wrap h-auto gap-1">
+        <TabsList className="flex h-auto flex-wrap gap-1">
           {CATEGORIES.map((cat) => (
             <TabsTrigger key={cat.value} value={cat.value} className="text-xs">
               {cat.label}
@@ -99,15 +110,16 @@ export function ExplorerClient({ namesByCategory }: ExplorerClientProps) {
             Selected{selected.length >= MAX_SERIES_NAMES ? ` (maximum of ${MAX_SERIES_NAMES})` : ""}:
           </span>
           {selected.map((name) => (
-            <Badge
+            <button
               key={name}
-              variant="default"
-              className="cursor-pointer gap-1 pr-1"
+              type="button"
               onClick={() => toggleItem(name)}
+              aria-label={`Remove ${name}`}
+              className="inline-flex items-center gap-1 rounded-full bg-hiveos px-2.5 py-0.5 text-xs font-semibold text-black hover:bg-hiveos/80"
             >
               {name}
-              <X className="h-3 w-3" />
-            </Badge>
+              <X className="h-3 w-3" aria-hidden />
+            </button>
           ))}
           <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setSelected([])}>
             Clear all
@@ -119,20 +131,25 @@ export function ExplorerClient({ namesByCategory }: ExplorerClientProps) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-base">
-            {CATEGORIES.find((c) => c.value === category)?.label} Over Time
+            {categoryLabel} Over Time
+            {weekly && <span className="ml-2 text-xs font-normal text-muted-foreground">weekly averages</span>}
           </CardTitle>
-          {loading && (
+          {series.loading && (
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" /> Loading...
             </div>
           )}
         </CardHeader>
         <CardContent className="pb-4">
-          {selected.length > 0 ? (
-            <LineChart data={chartData} selectedNames={selected} height={350} />
+          {selected.length === 0 ? (
+            <ChartEmpty>No data to display. Select items below.</ChartEmpty>
+          ) : series.error ? (
+            <ChartError message={series.error} onRetry={series.retry} />
+          ) : !series.data ? (
+            <div className="h-[350px] animate-pulse rounded-md bg-muted/30" aria-label="Loading chart" />
           ) : (
-            <div className="flex h-[350px] items-center justify-center text-muted-foreground">
-              No data to display. Select items above.
+            <div className={cn("transition-opacity", series.loading && "opacity-50")}>
+              <LineChart data={points} selectedNames={selected} height={350} />
             </div>
           )}
         </CardContent>
@@ -140,52 +157,37 @@ export function ExplorerClient({ namesByCategory }: ExplorerClientProps) {
 
       {/* Item Selection + Data Table side by side on desktop */}
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Item Selection */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Select Items</CardTitle>
-            <input
-              type="text"
-              placeholder="Search items..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="mt-2 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-hiveos"
-            />
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-1.5 max-h-[250px] overflow-y-auto">
-              {filtered.map((name) => {
-                const isSelected = selected.includes(name);
-                return (
-                  <Badge
-                    key={name}
-                    variant={isSelected ? "default" : "outline"}
-                    className="cursor-pointer text-xs transition-colors hover:bg-hiveos/20"
-                    onClick={() => toggleItem(name)}
-                  >
-                    {name}
-                  </Badge>
-                );
-              })}
-              {filtered.length === 0 && (
-                <p className="text-sm text-muted-foreground">No items found.</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <ItemPicker
+          catalog={catalog.catalog}
+          loading={catalog.loading}
+          error={catalog.error}
+          onRetry={catalog.retry}
+          selected={selected}
+          onToggle={toggleItem}
+          search={search}
+          onSearch={setSearch}
+          showHistorical={showHistorical}
+          onShowHistorical={setShowHistorical}
+        />
 
-        {/* Data Table */}
-        {selected.length > 0 && chartData.length > 0 && (
+        {selected.length > 0 && points.length > 0 && !series.error && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Data Table</CardTitle>
+              <CardTitle className="text-base">
+                Data Table
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  latest 30 {weekly ? "weeks" : "days"}
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <div className="max-h-[280px] overflow-y-auto">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-card">
                     <tr className="border-b border-border">
-                      <th className="pb-2 text-left font-medium text-muted-foreground">Date</th>
+                      <th className="pb-2 text-left font-medium text-muted-foreground">
+                        {weekly ? "Week of" : "Date"}
+                      </th>
                       {selected.map((name) => (
                         <th key={name} className="pb-2 text-right font-medium text-muted-foreground">
                           {name}
@@ -194,12 +196,12 @@ export function ExplorerClient({ namesByCategory }: ExplorerClientProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {chartData.slice(-30).reverse().map((row) => (
+                    {points.slice(-30).reverse().map((row) => (
                       <tr key={row.date} className="border-b border-border/30">
-                        <td className="py-1.5 whitespace-nowrap">{row.date}</td>
+                        <td className="whitespace-nowrap py-1.5">{row.date}</td>
                         {selected.map((name) => (
                           <td key={name} className="py-1.5 text-right tabular-nums">
-                            {row[name] !== undefined ? `${row[name]}%` : "-"}
+                            {row[name] !== undefined ? `${row[name]}%` : "–"}
                           </td>
                         ))}
                       </tr>
@@ -212,5 +214,127 @@ export function ExplorerClient({ namesByCategory }: ExplorerClientProps) {
         )}
       </div>
     </div>
+  );
+}
+
+function ItemButton({
+  item,
+  selected,
+  onToggle,
+}: {
+  item: CatalogItem;
+  selected: boolean;
+  onToggle: (name: string) => void;
+}) {
+  const historical = item.current === null;
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(item.name)}
+      aria-pressed={selected}
+      title={
+        historical
+          ? `No longer in HiveOS's stats. Last seen ${item.lastSeen}, peak ${item.peak}%`
+          : `${item.current}% now, peak ${item.peak}%`
+      }
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+        selected
+          ? "border-transparent bg-hiveos text-black"
+          : "border-border hover:bg-hiveos/20",
+        historical && !selected && "border-dashed text-muted-foreground"
+      )}
+    >
+      {item.name}
+      {!historical && <span className={cn("tabular-nums", selected ? "text-black/70" : "text-muted-foreground")}>{item.current}%</span>}
+    </button>
+  );
+}
+
+function ItemPicker({
+  catalog,
+  loading,
+  error,
+  onRetry,
+  selected,
+  onToggle,
+  search,
+  onSearch,
+  showHistorical,
+  onShowHistorical,
+}: {
+  catalog: CatalogItem[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  selected: string[];
+  onToggle: (name: string) => void;
+  search: string;
+  onSearch: (value: string) => void;
+  showHistorical: boolean;
+  onShowHistorical: (value: boolean) => void;
+}) {
+  const query = search.trim().toLowerCase();
+  const { active, historical } = useMemo(() => {
+    const matches = query ? catalog.filter((i) => i.name.toLowerCase().includes(query)) : catalog;
+    return {
+      active: matches.filter((i) => i.current !== null),
+      historical: matches.filter((i) => i.current === null),
+    };
+  }, [catalog, query]);
+  const selectedSet = new Set(selected);
+  const historicalVisible = showHistorical || query !== "";
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Select Items</CardTitle>
+        <input
+          type="search"
+          placeholder="Search all items, including ones no longer tracked..."
+          aria-label="Search items"
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
+          className="mt-2 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-hiveos"
+        />
+      </CardHeader>
+      <CardContent>
+        {error ? (
+          <ChartError message={error} onRetry={onRetry} height={120} />
+        ) : loading && catalog.length === 0 ? (
+          <div className="h-[120px] animate-pulse rounded-md bg-muted/30" />
+        ) : (
+          <div className="max-h-[300px] space-y-3 overflow-y-auto">
+            {active.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {active.map((item) => (
+                  <ItemButton key={item.name} item={item} selected={selectedSet.has(item.name)} onToggle={onToggle} />
+                ))}
+              </div>
+            )}
+            {historical.length > 0 &&
+              (historicalVisible ? (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">
+                    No longer in HiveOS&apos;s stats (most recently seen first):
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {historical.map((item) => (
+                      <ItemButton key={item.name} item={item} selected={selectedSet.has(item.name)} onToggle={onToggle} />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onShowHistorical(true)}>
+                  Show {historical.length.toLocaleString()} items no longer in HiveOS&apos;s stats
+                </Button>
+              ))}
+            {active.length === 0 && historical.length === 0 && (
+              <p className="text-sm text-muted-foreground">No items found.</p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

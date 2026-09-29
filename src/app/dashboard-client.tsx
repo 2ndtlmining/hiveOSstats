@@ -6,26 +6,23 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Sparkline } from "@/components/charts/sparkline";
 import { ExportButton } from "@/components/export-button";
 import { EXPORT_TYPES, type ExportType } from "@/lib/export-types";
-import { Download, RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
+import Link from "next/link";
+import { Download, RefreshCw } from "lucide-react";
+import { MoversCard, type MoversData } from "./movers-card";
+import { explorerHref } from "@/lib/links";
+import type { CategoryKey } from "@/types";
 
 interface StatCard {
-  category: string;
+  category: CategoryKey;
   label: string;
   count: number;
   topItem: { name: string; amount: number } | null;
   sparkData: { value: number }[];
 }
 
-interface Mover {
-  name: string;
-  category: string;
-  change: number;
-  current: number;
-}
-
 interface DashboardClientProps {
   stats: StatCard[];
-  movers: Mover[];
+  movers: MoversData;
   snapshotCount: number;
   latestLabel: string | null;
 }
@@ -63,70 +60,39 @@ export function DashboardClient({
       {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.category}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.label}
-              </CardTitle>
-              <Badge variant="secondary">{stat.count}</Badge>
-            </CardHeader>
-            <CardContent>
-              {stat.topItem ? (
-                <>
-                  <p className="text-lg font-semibold">{stat.topItem.name}</p>
-                  <p className="text-sm text-hiveos">{stat.topItem.amount}%</p>
-                  {stat.sparkData.length > 1 && (
-                    <div className="mt-2">
-                      <Sparkline data={stat.sparkData} />
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">No data</p>
-              )}
-            </CardContent>
-          </Card>
+          <Link
+            key={stat.category}
+            href={explorerHref(stat.category, stat.topItem ? [stat.topItem.name] : [])}
+            className="rounded-xl transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hiveos"
+          >
+            <Card className="h-full transition-colors hover:border-hiveos/50">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {stat.label}
+                </CardTitle>
+                <Badge variant="secondary">{stat.count}</Badge>
+              </CardHeader>
+              <CardContent>
+                {stat.topItem ? (
+                  <>
+                    <p className="text-lg font-semibold">{stat.topItem.name}</p>
+                    <p className="text-sm text-hiveos">{stat.topItem.amount}%</p>
+                    {stat.sparkData.length > 1 && (
+                      <div className="mt-2">
+                        <Sparkline data={stat.sparkData} />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No data</p>
+                )}
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 
-      {/* Top Movers */}
-      {movers.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Movers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {movers.map((mover, i) => (
-                <div
-                  key={`${mover.name}-${i}`}
-                  className="flex items-center justify-between rounded-lg border border-border p-3"
-                >
-                  <div>
-                    <p className="font-medium">{mover.name}</p>
-                    <p className="text-xs text-muted-foreground">{mover.category}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">{mover.current}%</span>
-                    <Badge
-                      variant={mover.change >= 0 ? "default" : "destructive"}
-                      className="flex items-center gap-1"
-                    >
-                      {mover.change >= 0 ? (
-                        <TrendingUp className="h-3 w-3" />
-                      ) : (
-                        <TrendingDown className="h-3 w-3" />
-                      )}
-                      {mover.change >= 0 ? "+" : ""}
-                      {mover.change}%
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <MoversCard data={movers} />
 
       {/* Export Options */}
       <Card id="excel-reports" className="scroll-mt-6">

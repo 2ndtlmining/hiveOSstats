@@ -218,14 +218,16 @@ Queries historical snapshot data from stored JSON files.
 
 | Parameter | Values | Description |
 |---|---|---|
-| `action` | `summary`, `names`, `latest` | Action to perform |
+| `action` | `summary`, `names`, `catalog`, `latest` (or `series`, implied by `names`) | Action to perform |
 | `category` | `coins`, `algos`, `gpu_brands`, `nvidia_models`, `amd_models`, `miners`, `asic_models` | Data category |
-| `names` | Comma-separated item names | Items to include in time series |
+| `names` | Comma-separated item names (max 20) | Items to include in a series |
+| `range` | `30d`, `90d` (default), `6m`, `1y`, `all` | Series range, counted back from the latest snapshot |
 
 - `?action=summary` -- Returns snapshot count and latest timestamp
 - `?action=names&category=coins` -- Returns list of unique item names for a category
+- `?action=catalog&category=coins` -- Every item ever seen, with `current` share (null once it has dropped out), `lastSeen` and `peak`. Active items first by share, then dropped items by most recently seen
 - `?action=latest` -- Returns the most recent snapshot (optionally filtered by category)
-- `?category=coins&names=BTC,ETH` -- Returns daily time series for up to 20 items. An item has no value on days it wasn't in HiveOS's stats
+- `?category=coins&names=BTC,ETH&range=1y` -- Returns `{ range, resolution, from, to, points }` for up to 20 items. `points` are daily, or weekly means when the range spans more than 400 days (`resolution: "weekly"`). An item has no value on days it wasn't in HiveOS's stats
 
 Unknown actions or categories, a missing `category`, or more than 20 names return **400**. Responses carry an `ETag` (the data version; `If-None-Match` gets a 304) and are gzipped when the client accepts it.
 

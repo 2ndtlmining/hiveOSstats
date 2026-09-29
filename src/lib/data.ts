@@ -17,6 +17,7 @@ let loaded: { version: string; snapshots: CleanedSnapshot[] } = { version: "", s
 
 const categoryDataCache = new Map<CategoryKey, DataItem[]>();
 const seriesCache = new Map<CategoryKey, CategorySeries>();
+const catalogCache = new Map<CategoryKey, CatalogItem[]>();
 
 // ─── Core Data Functions ──────────────────────────────────────
 
@@ -85,6 +86,7 @@ export function readAllSnapshots(): CleanedSnapshot[] {
   loaded = { version, snapshots };
   categoryDataCache.clear();
   seriesCache.clear();
+  catalogCache.clear();
   return snapshots;
 }
 
@@ -170,20 +172,72 @@ export function getUniqueNames(category: CategoryKey): string[] {
  */
 export function getTimeSeries(
   category: CategoryKey,
-  selectedNames: string[]
+  selectedNames: string[],
+  { from }: { from?: string | null } = {}
 ): TimeSeriesPoint[] {
   const { dates, values } = getCategorySeries(category);
+  const start = from ? dates.findIndex((d) => d >= from) : 0;
+  if (start < 0) return [];
   const columns = selectedNames
     .map((name) => [name, values.get(name)] as const)
     .filter((c): c is readonly [string, Float64Array] => c[1] !== undefined);
 
-  return dates.map((date, i) => {
+  return dates.slice(start).map((date, offset) => {
+    const i = start + offset;
     const point: TimeSeriesPoint = { date };
     for (const [name, column] of columns) {
       if (!Number.isNaN(column[i])) point[name] = column[i];
     }
     return point;
   });
+}
+
+export interface CatalogItem {
+  name: string;
+  /** Share in the latest snapshot, or null if the item has dropped out. */
+  current: number | null;
+  /** Last day the item was in HiveOS's stats. */
+  lastSeen: string;
+  /** Highest daily share ever. */
+  peak: number;
+}
+
+/**
+ * Every item ever seen in a category: active items first (largest current
+ * share first), then items that have dropped out (most recently seen first).
+ */
+export function getItemCatalog(category: CategoryKey): CatalogItem[] {
+  const { dates, values } = getCategorySeries(category);
+  const cached = catalogCache.get(category);
+  if (cached) return cached;
+
+  const last = dates.length - 1;
+  const items: CatalogItem[] = [];
+  for (const [name, column] of values) {
+    let lastIndex = -1;
+    let peak = 0;
+    for (let i = 0; i < column.length; i++) {
+      if (Number.isNaN(column[i])) continue;
+      lastIndex = i;
+      if (column[i] > peak) peak = column[i];
+    }
+    if (lastIndex < 0) continue;
+    items.push({
+      name,
+      current: lastIndex === last ? column[last] : null,
+      lastSeen: dates[lastIndex],
+      peak,
+    });
+  }
+  items.sort((a, b) => {
+    if (a.current !== null && b.current !== null) return b.current - a.current || a.name.localeCompare(b.name);
+    if (a.current !== null) return -1;
+    if (b.current !== null) return 1;
+    return b.lastSeen.localeCompare(a.lastSeen) || b.peak - a.peak;
+  });
+
+  catalogCache.set(category, items);
+  return items;
 }
 
 export interface SnapshotDiffRow {
@@ -234,90 +288,16 @@ export function getSnapshotDiff(category: CategoryKey): {
   return { previousDate: prev[0].snapshot, latestDate: last[0].snapshot, rows };
 }
 
-// ─── Efficient Dashboard Helpers ──────────────────────────────
+// ─── Dashboard Helpers ────────────────────────────────────────
 
-/**
- * Compute top movers across all categories in a single pass over the data.
- * Avoids calling getTimeSeries() 140+ times.
- */
-export function getTopMovers(
-  categories: CategoryKey[],
-  categoryLabels: Record<string, string>,
-  limit = 10
-): { name: string; category: string; change: number; current: number }[] {
-  const latest = getLatestSnapshot();
-  if (!latest) return [];
-
-  const movers: { name: string; category: string; change: number; current: number }[] = [];
-
-  for (const cat of categories) {
-    const catData = latest.data[cat];
-    if (!catData) continue;
-
-    // Get top 20 items by current amount
-    const topNames = Object.values(catData)
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 20)
-      .map((i) => i.name);
-
-    if (topNames.length === 0) continue;
-
-    // Get first and last snapshot values for these names in one pass
-    const items = getCategoryData(cat);
-    const firstByName: Record<string, { date: string; amount: number }> = {};
-    const lastByName: Record<string, { date: string; amount: number }> = {};
-    const nameSet = new Set(topNames);
-
-    for (const item of items) {
-      if (!nameSet.has(item.name)) continue;
-      const date = item.snapshot.split(" ")[0];
-
-      if (!firstByName[item.name] || date < firstByName[item.name].date) {
-        firstByName[item.name] = { date, amount: item.amount };
-      }
-      if (!lastByName[item.name] || date > lastByName[item.name].date) {
-        lastByName[item.name] = { date, amount: item.amount };
-      }
-    }
-
-    for (const name of topNames) {
-      const first = firstByName[name];
-      const last = lastByName[name];
-      if (first && last && first.amount > 0) {
-        const change = ((last.amount - first.amount) / first.amount) * 100;
-        movers.push({
-          name,
-          category: categoryLabels[cat] || cat,
-          change: Math.round(change * 100) / 100,
-          current: Math.round(last.amount * 100) / 100,
-        });
-      }
-    }
-  }
-
-  movers.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
-  return movers.slice(0, limit);
-}
-
-/**
- * Get sparkline data for a single item from the latest few snapshots only.
- * Much cheaper than full getTimeSeries().
- */
-export function getSparklineData(category: CategoryKey, name: string, maxPoints = 30): { value: number }[] {
-  const snapshots = readAllSnapshots();
+/** An item's daily share over the last `days` snapshot days (days it was absent are skipped). */
+export function getRecentValues(category: CategoryKey, name: string, days = 30): { value: number }[] {
+  const column = getCategorySeries(category).values.get(name);
+  if (!column) return [];
   const values: { value: number }[] = [];
-
-  // Only sample from the last N snapshots to keep it fast
-  const start = Math.max(0, snapshots.length - maxPoints);
-  for (let i = start; i < snapshots.length; i++) {
-    const cat = snapshots[i][category];
-    if (!cat) continue;
-    const item = Object.values(cat).find((v) => v.name === name);
-    if (item) {
-      values.push({ value: item.amount });
-    }
+  for (let i = Math.max(0, column.length - days); i < column.length; i++) {
+    if (!Number.isNaN(column[i])) values.push({ value: column[i] });
   }
-
   return values;
 }
 

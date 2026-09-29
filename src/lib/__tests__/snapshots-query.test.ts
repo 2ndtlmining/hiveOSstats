@@ -6,14 +6,17 @@ const q = (s: string) => parseSnapshotsQuery(new URLSearchParams(s));
 describe("parseSnapshotsQuery", () => {
   it("accepts a series request and trims and dedupes names", () => {
     expect(q("category=coins&names=XMR, PRL,XMR,")).toEqual({
-      action: "series", category: "coins", names: ["XMR", "PRL"],
+      action: "series", category: "coins", names: ["XMR", "PRL"], range: "90d",
     });
+    expect(q("category=coins&names=XMR&range=all")).toMatchObject({ range: "all" });
+    expect(q("category=coins&names=XMR&range=5y")).toHaveProperty("error");
   });
 
   it("accepts summary, names and latest", () => {
     expect(q("action=summary")).toEqual({ action: "summary" });
     expect(q("action=names&category=miners")).toEqual({ action: "names", category: "miners" });
     expect(q("action=latest")).toEqual({ action: "latest", category: null });
+    expect(q("action=catalog&category=coins")).toEqual({ action: "catalog", category: "coins" });
   });
 
   it("rejects unknown categories, including prototype keys", () => {

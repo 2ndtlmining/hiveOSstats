@@ -1,23 +1,23 @@
-import { getLatestSnapshot } from "@/lib/data";
-import { CATEGORIES } from "@/types";
+import { getItemCatalog } from "@/lib/data";
+import { parseViewParams } from "@/lib/view-params";
 import { ExplorerClient } from "./explorer-client";
 
 export const dynamic = "force-dynamic";
 
-export default function ExplorePage() {
-  const latest = getLatestSnapshot();
-  const namesByCategory: Record<string, string[]> = {};
+export default async function ExplorePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cat?: string; items?: string; range?: string }>;
+}) {
+  const params = await searchParams;
+  const { category, range, catalog, pickNames } = parseViewParams(params, getItemCatalog);
 
-  for (const cat of CATEGORIES) {
-    if (latest) {
-      const catData = latest.data[cat.value];
-      namesByCategory[cat.value] = catData
-        ? Object.values(catData).map((i) => i.name).sort()
-        : [];
-    } else {
-      namesByCategory[cat.value] = [];
-    }
-  }
-
-  return <ExplorerClient namesByCategory={namesByCategory} />;
+  return (
+    <ExplorerClient
+      initialCategory={category}
+      initialItems={pickNames(params.items)}
+      initialRange={range}
+      initialCatalog={catalog}
+    />
+  );
 }
