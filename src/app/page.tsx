@@ -1,35 +1,35 @@
-import { getLatestSnapshot, getLatestSnapshotTime, getSnapshotCount, getTopMovers, getSparklineData } from "@/lib/data";
+import { getLatestSnapshot, getLatestSnapshotTime, getRecentValues, getSnapshotCount } from "@/lib/data";
 import { dataAgeHours, formatAge, formatUtc } from "@/lib/health";
+import { DEFAULT_MOVER_WINDOW, getMovers, isMoverWindow } from "@/lib/movers";
 import type { CategoryKey } from "@/types";
 import { CATEGORY_LABELS } from "@/types";
 import { DashboardClient } from "./dashboard-client";
 
 export const dynamic = "force-dynamic";
 
-export default function DashboardPage() {
+const CATEGORIES: CategoryKey[] = ["coins", "algos", "gpu_brands", "nvidia_models", "amd_models", "miners", "asic_models"];
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ movers?: string }>;
+}) {
+  const { movers: moversParam } = await searchParams;
+  const moverWindow = isMoverWindow(moversParam) ? moversParam : DEFAULT_MOVER_WINDOW;
+
   const latest = getLatestSnapshot();
-  const snapshotCount = getSnapshotCount();
 
-  const categories: CategoryKey[] = ["coins", "algos", "gpu_brands", "nvidia_models", "amd_models", "miners", "asic_models"];
-
-  const stats = categories.map((cat) => {
+  const stats = CATEGORIES.map((cat) => {
     const items = latest ? Object.values(latest.data[cat] || {}) : [];
     const topItem = items.sort((a, b) => b.amount - a.amount)[0];
-
-    // Use lightweight sparkline helper instead of full getTimeSeries()
-    const sparkData = topItem ? getSparklineData(cat, topItem.name) : [];
-
     return {
       category: cat,
       label: CATEGORY_LABELS[cat],
       count: items.length,
       topItem: topItem ? { name: topItem.name, amount: Math.round(topItem.amount * 100) / 100 } : null,
-      sparkData,
+      sparkData: topItem ? getRecentValues(cat, topItem.name) : [],
     };
   });
-
-  // Compute top movers in a single efficient pass
-  const movers = getTopMovers(categories, CATEGORY_LABELS);
 
   const latestTime = getLatestSnapshotTime();
   const age = dataAgeHours(latestTime);
@@ -38,8 +38,8 @@ export default function DashboardPage() {
   return (
     <DashboardClient
       stats={stats}
-      movers={movers}
-      snapshotCount={snapshotCount}
+      movers={{ window: moverWindow, ...getMovers(moverWindow) }}
+      snapshotCount={getSnapshotCount()}
       latestLabel={latestLabel}
     />
   );

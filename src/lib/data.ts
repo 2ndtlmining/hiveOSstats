@@ -234,90 +234,16 @@ export function getSnapshotDiff(category: CategoryKey): {
   return { previousDate: prev[0].snapshot, latestDate: last[0].snapshot, rows };
 }
 
-// ─── Efficient Dashboard Helpers ──────────────────────────────
+// ─── Dashboard Helpers ────────────────────────────────────────
 
-/**
- * Compute top movers across all categories in a single pass over the data.
- * Avoids calling getTimeSeries() 140+ times.
- */
-export function getTopMovers(
-  categories: CategoryKey[],
-  categoryLabels: Record<string, string>,
-  limit = 10
-): { name: string; category: string; change: number; current: number }[] {
-  const latest = getLatestSnapshot();
-  if (!latest) return [];
-
-  const movers: { name: string; category: string; change: number; current: number }[] = [];
-
-  for (const cat of categories) {
-    const catData = latest.data[cat];
-    if (!catData) continue;
-
-    // Get top 20 items by current amount
-    const topNames = Object.values(catData)
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 20)
-      .map((i) => i.name);
-
-    if (topNames.length === 0) continue;
-
-    // Get first and last snapshot values for these names in one pass
-    const items = getCategoryData(cat);
-    const firstByName: Record<string, { date: string; amount: number }> = {};
-    const lastByName: Record<string, { date: string; amount: number }> = {};
-    const nameSet = new Set(topNames);
-
-    for (const item of items) {
-      if (!nameSet.has(item.name)) continue;
-      const date = item.snapshot.split(" ")[0];
-
-      if (!firstByName[item.name] || date < firstByName[item.name].date) {
-        firstByName[item.name] = { date, amount: item.amount };
-      }
-      if (!lastByName[item.name] || date > lastByName[item.name].date) {
-        lastByName[item.name] = { date, amount: item.amount };
-      }
-    }
-
-    for (const name of topNames) {
-      const first = firstByName[name];
-      const last = lastByName[name];
-      if (first && last && first.amount > 0) {
-        const change = ((last.amount - first.amount) / first.amount) * 100;
-        movers.push({
-          name,
-          category: categoryLabels[cat] || cat,
-          change: Math.round(change * 100) / 100,
-          current: Math.round(last.amount * 100) / 100,
-        });
-      }
-    }
-  }
-
-  movers.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
-  return movers.slice(0, limit);
-}
-
-/**
- * Get sparkline data for a single item from the latest few snapshots only.
- * Much cheaper than full getTimeSeries().
- */
-export function getSparklineData(category: CategoryKey, name: string, maxPoints = 30): { value: number }[] {
-  const snapshots = readAllSnapshots();
+/** An item's daily share over the last `days` snapshot days (days it was absent are skipped). */
+export function getRecentValues(category: CategoryKey, name: string, days = 30): { value: number }[] {
+  const column = getCategorySeries(category).values.get(name);
+  if (!column) return [];
   const values: { value: number }[] = [];
-
-  // Only sample from the last N snapshots to keep it fast
-  const start = Math.max(0, snapshots.length - maxPoints);
-  for (let i = start; i < snapshots.length; i++) {
-    const cat = snapshots[i][category];
-    if (!cat) continue;
-    const item = Object.values(cat).find((v) => v.name === name);
-    if (item) {
-      values.push({ value: item.amount });
-    }
+  for (let i = Math.max(0, column.length - days); i < column.length; i++) {
+    if (!Number.isNaN(column[i])) values.push({ value: column[i] });
   }
-
   return values;
 }
 
