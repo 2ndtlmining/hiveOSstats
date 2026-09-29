@@ -35,7 +35,8 @@ describe("display names", () => {
       "ANTMINER L3_ HIVEON": "Antminer L3+ Hiveon",
       "WHATSMINER M30S__": "WhatsMiner M30S++",
     });
-    expect(displayName("miners", "XMRIG_NEW")).toBe("xmrig-new");
+    // All-lowercase names are uppercased, keeping punctuation
+    expect(displayName("miners", "XMRIG_NEW")).toBe("XMRIG-NEW");
     expect(displayName("asic_models", "UNKNOWN")).toBe("UNKNOWN");
   });
 

@@ -28,6 +28,15 @@ function rawFiles(): string[] {
     .sort((a, b) => time(a) - time(b) || a.localeCompare(b));
 }
 
+/**
+ * HiveOS gives some categories in lowercase ("xmrig-new", "nvidia"). Those
+ * are uppercased to match the rest of the UI, keeping their punctuation
+ * ("XMRIG-NEW"); mixed-case names keep their casing ("Antminer L3+ Hiveon").
+ */
+function readable(name: string): string {
+  return /[A-Z]/.test(name) ? name : name.toUpperCase();
+}
+
 function refresh() {
   for (const file of rawFiles()) {
     if (readFiles.has(file)) continue;
@@ -49,7 +58,7 @@ function refresh() {
         const prev = best.get(key);
         if (!prev || (item.amount ?? 0) > prev.amount) best.set(key, { name: item.name.trim(), amount: item.amount ?? 0 });
       }
-      for (const [key, { name }] of best) labels[category].set(key, name);
+      for (const [key, { name }] of best) labels[category].set(key, readable(name));
     }
   }
 }
