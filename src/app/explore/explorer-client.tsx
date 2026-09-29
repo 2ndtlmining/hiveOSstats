@@ -138,8 +138,8 @@ export function ExplorerClient({ initialCategory, initialItems, initialRange, in
             {weekly && <span className="ml-2 text-xs font-normal text-muted-foreground">weekly averages</span>}
           </CardTitle>
           {series.loading && (
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" /> Loading...
+            <div role="status" className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Loading...
             </div>
           )}
         </CardHeader>

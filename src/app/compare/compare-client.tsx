@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { Loader2, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { Loader2, Minus, Plus, TrendingDown, TrendingUp, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartEmpty, ChartError } from "@/components/chart-status";
 import { CopyLinkButton } from "@/components/copy-link-button";
@@ -14,6 +14,7 @@ import type { CatalogItem } from "@/lib/data";
 import type { RangedSeries } from "@/lib/series";
 import { DEFAULT_RANGE, RANGE_LABELS, type Range } from "@/lib/ranges";
 import { replaceQuery } from "@/lib/url-state";
+import { MAX_COMPARE_ITEMS } from "@/lib/snapshots-query";
 import { CATEGORIES } from "@/types";
 import type { CategoryKey, TimeSeriesPoint } from "@/types";
 
@@ -25,8 +26,7 @@ const LineChart = dynamic(
 
 interface CompareClientProps {
   initialCategory: CategoryKey;
-  initialA: string;
-  initialB: string;
+  initialItems: string[];
   initialRange: Range;
   initialCatalog: CatalogItem[];
 }
@@ -39,21 +39,35 @@ function ItemSelect({
   label,
   value,
   onChange,
+  onRemove,
   catalog,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onRemove?: () => void;
   catalog: CatalogItem[];
 }) {
   const active = catalog.filter((i) => i.current !== null);
   const historical = catalog.filter((i) => i.current === null);
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium text-muted-foreground">
-        {label}
-      </label>
+      <div className="mb-1 flex items-center justify-between">
+        <label htmlFor={id} className="block text-xs font-medium text-muted-foreground">
+          {label}
+        </label>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`Remove ${label}`}
+            className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3 w-3" aria-hidden />
+          </button>
+        )}
+      </div>
       <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={selectClass}>
         <option value="">Select...</option>
         <optgroup label="In the latest snapshot">
@@ -93,14 +107,15 @@ function summarize(points: TimeSeriesPoint[], name: string) {
   };
 }
 
-export function CompareClient({ initialCategory, initialA, initialB, initialRange, initialCatalog }: CompareClientProps) {
+export function CompareClient({ initialCategory, initialItems, initialRange, initialCatalog }: CompareClientProps) {
   const [category, setCategory] = useState<CategoryKey>(initialCategory);
-  const [itemA, setItemA] = useState(initialA);
-  const [itemB, setItemB] = useState(initialB);
+  // One entry per picker; "" is an empty picker. Always at least two.
+  const [items, setItems] = useState<string[]>(() => [...initialItems, "", ""].slice(0, Math.max(2, initialItems.length)));
   const [range, setRange] = useState<Range>(initialRange);
 
   const catalog = useCatalog(category, initialCategory, initialCatalog);
-  const selected = [...new Set([itemA, itemB].filter(Boolean))];
+  const selected = [...new Set(items.filter(Boolean))];
+  const setItem = (index: number, value: string) => setItems((prev) => prev.map((v, i) => (i === index ? value : v)));
   const seriesUrl =
     selected.length > 0
       ? `/api/snapshots?${new URLSearchParams({ category, names: selected.join(","), range })}`
@@ -110,16 +125,14 @@ export function CompareClient({ initialCategory, initialA, initialB, initialRang
   useEffect(() => {
     replaceQuery({
       cat: category,
-      a: itemA || null,
-      b: itemB || null,
+      items: items.filter(Boolean).join(",") || null,
       range: range === DEFAULT_RANGE ? null : range,
     });
-  }, [category, itemA, itemB, range]);
+  }, [category, items, range]);
 
   function handleCategoryChange(val: string) {
     setCategory(val as CategoryKey);
-    setItemA("");
-    setItemB("");
+    setItems(["", ""]);
   }
 
   const points = series.data?.points ?? [];
@@ -131,7 +144,7 @@ export function CompareClient({ initialCategory, initialA, initialB, initialRang
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Compare</h1>
           <p className="text-sm text-muted-foreground">
-            Side-by-side comparison of two items in the same category.
+            Compare up to {MAX_COMPARE_ITEMS} items in the same category over a time range.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -143,7 +156,7 @@ export function CompareClient({ initialCategory, initialA, initialB, initialRang
       {/* Controls */}
       <Card>
         <CardContent className="pb-4 pt-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <label htmlFor="compare-category" className="mb-1 block text-xs font-medium text-muted-foreground">
                 Category
@@ -159,8 +172,29 @@ export function CompareClient({ initialCategory, initialA, initialB, initialRang
                 ))}
               </select>
             </div>
-            <ItemSelect id="compare-a" label="Item A" value={itemA} onChange={setItemA} catalog={catalog.catalog} />
-            <ItemSelect id="compare-b" label="Item B" value={itemB} onChange={setItemB} catalog={catalog.catalog} />
+            {items.map((value, i) => (
+              <ItemSelect
+                key={i}
+                id={`compare-item-${i}`}
+                label={`Item ${String.fromCharCode(65 + i)}`}
+                value={value}
+                onChange={(v) => setItem(i, v)}
+                onRemove={items.length > 2 ? () => setItems((prev) => prev.filter((_, j) => j !== i)) : undefined}
+                catalog={catalog.catalog}
+              />
+            ))}
+            {items.length < MAX_COMPARE_ITEMS && (
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => setItems((prev) => [...prev, ""])}
+                  className="inline-flex h-[38px] w-full items-center justify-center gap-1 rounded-md border border-dashed border-border text-sm text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
+                  Add item
+                </button>
+              </div>
+            )}
           </div>
           {catalog.error && (
             <p className="mt-2 text-xs text-red-600 dark:text-red-400">
@@ -181,8 +215,8 @@ export function CompareClient({ initialCategory, initialA, initialB, initialRang
             )}
           </CardTitle>
           {series.loading && (
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" /> Loading...
+            <div role="status" className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Loading...
             </div>
           )}
         </CardHeader>
@@ -203,7 +237,7 @@ export function CompareClient({ initialCategory, initialA, initialB, initialRang
 
       {/* Change Summary Cards */}
       {summaries.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {summaries.map((row) => {
             const isPositive = row.change > 0;
             const isNeutral = row.change === 0;
@@ -214,7 +248,10 @@ export function CompareClient({ initialCategory, initialA, initialB, initialRang
                 <CardContent className="pb-4 pt-4">
                   <div className="mb-2 flex items-center justify-between">
                     <h3 className="text-sm font-semibold">{series.data?.labels[row.name] ?? row.name}</h3>
-                    <div className={cn("flex items-center gap-1 text-sm font-medium", tone)}>
+                    <div
+                      className={cn("flex items-center gap-1 text-sm font-medium", tone)}
+                      title="Percentage points: the difference between the two shares (e.g. 38% → 41% is +3 pp)"
+                    >
                       <Icon className="h-3 w-3" aria-hidden />
                       {isPositive ? "+" : ""}
                       {row.change} pp

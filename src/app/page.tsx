@@ -20,17 +20,21 @@ export default async function DashboardPage({
 
   const latest = getLatestSnapshot();
 
+  const round2 = (n: number) => Math.round(n * 100) / 100;
   const stats = CATEGORIES.map((cat) => {
-    const items = latest ? Object.values(latest.data[cat] || {}) : [];
-    const topItem = items.sort((a, b) => b.amount - a.amount)[0];
+    const items = latest ? Object.values(latest.data[cat] || {}).sort((a, b) => b.amount - a.amount) : [];
+    const topItem = items[0];
+    const sparkData = topItem ? getRecentValues(cat, topItem.name, 30) : [];
+    const change = sparkData.length > 1 ? round2(sparkData[sparkData.length - 1].value - sparkData[0].value) : null;
     return {
       category: cat,
       label: CATEGORY_LABELS[cat],
       count: items.length,
       topItem: topItem
-        ? { name: topItem.name, label: displayName(cat, topItem.name), amount: Math.round(topItem.amount * 100) / 100 }
+        ? { name: topItem.name, label: displayName(cat, topItem.name), amount: round2(topItem.amount), change }
         : null,
-      sparkData: topItem ? getRecentValues(cat, topItem.name) : [],
+      runnersUp: items.slice(1, 4).map((i) => ({ label: displayName(cat, i.name), amount: round2(i.amount) })),
+      sparkData,
     };
   });
 

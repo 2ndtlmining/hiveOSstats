@@ -10,6 +10,7 @@ interface TrendView {
   title: string;
   names: string[];
   labels: Record<string, string>;
+  latest: Record<string, number>;
   resolution: "daily" | "weekly";
   data: ColumnarSeries;
 }
@@ -28,7 +29,7 @@ export function TrendsClient({ views, range, defaultRange }: TrendsClientProps) 
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Trends</h1>
           <p className="text-muted-foreground">
-            Composition over time of the current top 10 in each category
+            Composition over time: the current top 8 in each category, plus everything else as Other
             {weekly ? " (weekly averages)" : ""}.
           </p>
         </div>
@@ -41,7 +42,13 @@ export function TrendsClient({ views, range, defaultRange }: TrendsClientProps) 
             <CardTitle>{view.title}</CardTitle>
           </CardHeader>
           <CardContent>
-            <AreaChart data={fromColumns(view.data)} selectedNames={view.names} labels={view.labels} stacked />
+            <AreaChart
+              data={fromColumns(view.data)}
+              selectedNames={view.names}
+              labels={view.labels}
+              latest={view.latest}
+              stacked
+            />
           </CardContent>
         </Card>
       ))}

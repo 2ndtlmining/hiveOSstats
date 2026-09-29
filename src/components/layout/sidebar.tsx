@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { ThemeToggle } from "./theme-toggle";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -28,10 +29,13 @@ export function Sidebar() {
     <>
       {/* Mobile toggle */}
       <button
+        type="button"
         onClick={() => setOpen(!open)}
+        aria-label={open ? "Close navigation" : "Open navigation"}
+        aria-expanded={open}
         className="fixed top-4 left-4 z-50 rounded-md bg-card p-2 md:hidden border border-border"
       >
-        {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        {open ? <X className="h-5 w-5" aria-hidden /> : <Menu className="h-5 w-5" aria-hidden />}
       </button>
 
       {/* Overlay */}
@@ -69,9 +73,10 @@ export function Sidebar() {
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   active
-                    ? "bg-hiveos/10 text-hiveos"
+                    ? "bg-hiveos/10 text-amber-700 dark:text-hiveos"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 )}
+                aria-current={active ? "page" : undefined}
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
@@ -81,10 +86,9 @@ export function Sidebar() {
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-border p-4">
-          <p className="text-xs text-muted-foreground">
-            Data from HiveOS Public API
-          </p>
+        <div className="flex items-center justify-between gap-2 border-t border-border p-4">
+          <p className="text-xs text-muted-foreground">Data from HiveOS Public API</p>
+          <ThemeToggle />
         </div>
       </aside>
     </>

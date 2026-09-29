@@ -1,6 +1,7 @@
 import { getItemCatalog } from "@/lib/data";
 import { withLabels } from "@/lib/labels";
 import { parseViewParams } from "@/lib/view-params";
+import { MAX_COMPARE_ITEMS } from "@/lib/snapshots-query";
 import { CompareClient } from "./compare-client";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function ComparePage({
   searchParams,
 }: {
-  searchParams: Promise<{ cat?: string; a?: string; b?: string; range?: string }>;
+  searchParams: Promise<{ cat?: string; items?: string; a?: string; b?: string; range?: string }>;
 }) {
   const params = await searchParams;
   const { category, range, catalog, pickNames } = parseViewParams(params, (cat) => withLabels(cat, getItemCatalog(cat)));
@@ -16,8 +17,8 @@ export default async function ComparePage({
   return (
     <CompareClient
       initialCategory={category}
-      initialA={pickNames(params.a, 1)[0] ?? ""}
-      initialB={pickNames(params.b, 1)[0] ?? ""}
+      // ?items=A,B,C; ?a=&b= links from before multi-item compare still work
+      initialItems={pickNames(params.items ?? [params.a, params.b].filter(Boolean).join(","), MAX_COMPARE_ITEMS)}
       initialRange={range}
       initialCatalog={catalog}
     />

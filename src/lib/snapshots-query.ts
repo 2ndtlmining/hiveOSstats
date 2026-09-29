@@ -4,6 +4,9 @@ import { DEFAULT_RANGE, isRange, RANGES, type Range } from "./ranges";
 /** Most items a single series request may ask for. */
 export const MAX_SERIES_NAMES = 20;
 
+/** Most items Compare shows side by side. */
+export const MAX_COMPARE_ITEMS = 5;
+
 export type SnapshotsQuery =
   | { action: "summary" }
   | { action: "latest"; category: CategoryKey | null }
