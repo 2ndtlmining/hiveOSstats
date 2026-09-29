@@ -63,15 +63,16 @@ describe("daily pivot export", () => {
     const sheet = (await readWorkbook(file.path)).getWorksheet("Coins Pivot")!;
     const header = rowValues(sheet, 1);
     expect(header[0]).toBe("Name");
-    expect(header[1]).toEqual(new Date("2026-01-01T00:00:00Z"));
-    expect(sheet.getRow(1).getCell(2).numFmt).toBe("yyyy-mm-dd");
+    expect(header[1]).toBe("Display name");
+    expect(header[2]).toEqual(new Date("2026-01-01T00:00:00Z"));
+    expect(sheet.getRow(1).getCell(3).numFmt).toBe("yyyy-mm-dd");
 
     // NEW (55) and XMR (45) are in the latest snapshot; OLD dropped out
-    expect(rowValues(sheet, 2)).toEqual(["NEW", undefined, 10, 55]);
-    expect(rowValues(sheet, 3)).toEqual(["XMR", 50, 40, 45]);
+    expect(rowValues(sheet, 2)).toEqual(["NEW", "NEW", undefined, 10, 55]);
+    expect(rowValues(sheet, 3)).toEqual(["XMR", "XMR", 50, 40, 45]);
     expect(rowValues(sheet, 4)[0]).toBe("OLD");
 
-    expect(sheet.views[0]).toMatchObject({ state: "frozen", xSplit: 1, ySplit: 1 });
+    expect(sheet.views[0]).toMatchObject({ state: "frozen", xSplit: 2, ySplit: 1 });
   });
 });
 

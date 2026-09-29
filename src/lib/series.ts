@@ -1,5 +1,6 @@
 import type { CategoryKey, TimeSeriesPoint } from "@/types";
 import { getCategorySeries, getTimeSeries } from "./data";
+import { getDisplayNames } from "./labels";
 import { rangeStart, type Range } from "./ranges";
 import { weeklyMeans } from "./series-format";
 
@@ -12,6 +13,8 @@ export interface RangedSeries {
   from: string | null;
   to: string | null;
   points: TimeSeriesPoint[];
+  /** Readable names for series whose name differs. */
+  labels: Record<string, string>;
 }
 
 /**
@@ -30,5 +33,6 @@ export function getRangedSeries(category: CategoryKey, names: string[], range: R
     from: daily[0]?.date ?? null,
     to: daily[daily.length - 1]?.date ?? null,
     points: weekly ? weeklyMeans(daily, names) : daily,
+    labels: getDisplayNames(category, names),
   };
 }

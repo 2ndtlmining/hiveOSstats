@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { CleanedSnapshot, CategoryKey, DataItem, TimeSeriesPoint } from "@/types";
 
-function dataDir(): string {
+export function dataDir(): string {
   return process.env.DATA_DIR ?? path.join(process.cwd(), "data");
 }
 
@@ -200,6 +200,8 @@ export interface CatalogItem {
   lastSeen: string;
   /** Highest daily share ever. */
   peak: number;
+  /** Original HiveOS spelling, when it differs from the name (see labels.ts). */
+  label?: string;
 }
 
 /**

@@ -3,6 +3,7 @@ import type { Writable } from "stream";
 import type { CategoryKey, TimeSeriesPoint } from "@/types";
 import { CATEGORY_LABELS } from "@/types";
 import { EXPORT_TYPES, type ExportType } from "./export-types";
+import { getDisplayNames } from "./labels";
 import {
   getCategoryData,
   getLatestSnapshot,
@@ -153,8 +154,10 @@ async function writeSnapshotSheets(workbook: ExcelJS.stream.xlsx.WorkbookWriter)
 async function writeDiffSheets(workbook: ExcelJS.stream.xlsx.WorkbookWriter) {
   for (const cat of ALL_CATEGORIES) {
     const { previousDate, latestDate, rows } = getSnapshotDiff(cat);
-    const sheet = addSheet(workbook, `${CATEGORY_LABELS[cat]} Diff`, 5);
+    const labels = getDisplayNames(cat, rows.map((r) => r.name));
+    const sheet = addSheet(workbook, `${CATEGORY_LABELS[cat]} Diff`, 6);
     sheet.columns = [
+      { width: 30 },
       { width: 30 },
       { width: 28, style: { numFmt: PCT_FORMAT } },
       { width: 28, style: { numFmt: PCT_FORMAT } },
@@ -163,12 +166,13 @@ async function writeDiffSheets(workbook: ExcelJS.stream.xlsx.WorkbookWriter) {
     ];
     commitHeader(sheet, [
       "Name",
+      "Display name",
       `Previous (%) ${previousDate ?? ""}`.trim(),
       `Latest (%) ${latestDate ?? ""}`.trim(),
       "Change (pp)",
       "Status",
     ]);
-    await commitRows(sheet, rows.map((r) => [r.name, r.previous, r.latest, r.change, r.status]));
+    await commitRows(sheet, rows.map((r) => [r.name, labels[r.name] ?? r.name, r.previous, r.latest, r.change, r.status]));
     sheet.commit();
   }
 }
@@ -181,19 +185,21 @@ async function writePivotSheets(workbook: ExcelJS.stream.xlsx.WorkbookWriter, mo
     const daily = getTimeSeries(cat, names);
     const series = monthly ? toMonthly(daily, names) : daily;
     const periods = series.map((p) => p.date);
-    const sheet = addSheet(workbook, `${CATEGORY_LABELS[cat]} ${monthly ? "Monthly" : "Pivot"}`, periods.length + 1);
+    const labels = getDisplayNames(cat, names);
+    const sheet = addSheet(workbook, `${CATEGORY_LABELS[cat]} ${monthly ? "Monthly" : "Pivot"}`, periods.length + 2, 2);
     sheet.columns = [
+      { width: 30 },
       { width: 30 },
       ...periods.map(() => ({ width: monthly ? 9 : 11, style: { numFmt: PCT_FORMAT } })),
     ];
-    commitHeader(sheet, ["Name", ...periods.map(dayOrMonthDate)], monthly ? "yyyy-mm" : "yyyy-mm-dd");
+    commitHeader(sheet, ["Name", "Display name", ...periods.map(dayOrMonthDate)], monthly ? "yyyy-mm" : "yyyy-mm-dd");
 
     const order = pivotNameOrder(names, daily);
     await commitRows(
       sheet,
       (function* () {
         for (const name of order) {
-          yield [name, ...series.map((p) => (p[name] as number | undefined) ?? null)];
+          yield [name, labels[name] ?? name, ...series.map((p) => (p[name] as number | undefined) ?? null)];
         }
       })()
     );

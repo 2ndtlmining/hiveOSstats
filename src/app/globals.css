@@ -23,11 +23,18 @@
     --border: #E4E4E7;
     --input: #E4E4E7;
     --ring: #FFB800;
-    --chart-1: #FFB800;
-    --chart-2: #22C55E;
-    --chart-3: #3B82F6;
-    --chart-4: #A855F7;
-    --chart-5: #EF4444;
+    /* Chart series: 8 categorical slots in a fixed order, validated for
+       colour-blind separation against each mode's surface. Never cycled: more
+       series fold into "Other" or add a dash pattern. */
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #4a3aa7;
+    --series-8: #e34948;
+    --series-other: #a1a19b;
     --radius: 0.625rem;
     --sidebar: #FFFFFF;
     --sidebar-foreground: #09090B;
@@ -51,7 +58,7 @@
     --secondary: #1C1C1E;
     --secondary-foreground: #FAFAFA;
     --muted: #1C1C1E;
-    --muted-foreground: #71717A;
+    --muted-foreground: #A1A1AA;
     --accent: #1C1C1E;
     --accent-foreground: #FAFAFA;
     --destructive: #EF4444;
@@ -59,11 +66,15 @@
     --border: #27272A;
     --input: #27272A;
     --ring: #FFB800;
-    --chart-1: #FFB800;
-    --chart-2: #22C55E;
-    --chart-3: #3B82F6;
-    --chart-4: #A855F7;
-    --chart-5: #EF4444;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --series-other: #5c5c58;
     --sidebar: #141414;
     --sidebar-foreground: #FAFAFA;
     --sidebar-primary: #FFB800;

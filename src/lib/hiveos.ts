@@ -45,6 +45,16 @@ export function validateRawSnapshot(data: unknown): string[] {
   return errors;
 }
 
+/**
+ * The stable key an item is stored under: special characters become "_" and
+ * everything is uppercased ("Antminer L3+ Hiveon" -> "ANTMINER L3_ HIVEON").
+ * Two years of history use these keys, so this must never change; see
+ * labels.ts for the readable names.
+ */
+export function cleanKey(name: string): string {
+  return name.replace(/[^\w\s\p{L}]/gu, "_").toUpperCase();
+}
+
 export function cleanData(data: RawSnapshot): CleanedSnapshot {
   const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
   const cleaned: Partial<CleanedSnapshot> = {};
@@ -58,9 +68,7 @@ export function cleanData(data: RawSnapshot): CleanedSnapshot {
       const { name, amount } = item;
       if (!name || typeof name !== "string") continue;
 
-      const cleanName = name
-        .replace(/[^\w\s\p{L}]/gu, "_")
-        .toUpperCase();
+      const cleanName = cleanKey(name);
 
       if (NAMES_TO_REMOVE.has(cleanName)) continue;
 

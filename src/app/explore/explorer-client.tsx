@@ -74,6 +74,9 @@ export function ExplorerClient({ initialCategory, initialItems, initialRange, in
   }
 
   const categoryLabel = CATEGORIES.find((c) => c.value === category)?.label;
+  const labels = series.data?.labels ?? {};
+  const catalogLabels = Object.fromEntries(catalog.catalog.map((i) => [i.name, i.label ?? i.name]));
+  const labelOf = (name: string) => labels[name] ?? catalogLabels[name] ?? name;
   const points = series.data?.points ?? [];
   const weekly = series.data?.resolution === "weekly";
 
@@ -114,10 +117,10 @@ export function ExplorerClient({ initialCategory, initialItems, initialRange, in
               key={name}
               type="button"
               onClick={() => toggleItem(name)}
-              aria-label={`Remove ${name}`}
+              aria-label={`Remove ${labelOf(name)}`}
               className="inline-flex items-center gap-1 rounded-full bg-hiveos px-2.5 py-0.5 text-xs font-semibold text-black hover:bg-hiveos/80"
             >
-              {name}
+              {labelOf(name)}
               <X className="h-3 w-3" aria-hidden />
             </button>
           ))}
@@ -135,8 +138,8 @@ export function ExplorerClient({ initialCategory, initialItems, initialRange, in
             {weekly && <span className="ml-2 text-xs font-normal text-muted-foreground">weekly averages</span>}
           </CardTitle>
           {series.loading && (
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" /> Loading...
+            <div role="status" className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Loading...
             </div>
           )}
         </CardHeader>
@@ -149,7 +152,7 @@ export function ExplorerClient({ initialCategory, initialItems, initialRange, in
             <div className="h-[350px] animate-pulse rounded-md bg-muted/30" aria-label="Loading chart" />
           ) : (
             <div className={cn("transition-opacity", series.loading && "opacity-50")}>
-              <LineChart data={points} selectedNames={selected} height={350} />
+              <LineChart data={points} selectedNames={selected} labels={labels} height={350} />
             </div>
           )}
         </CardContent>
@@ -190,7 +193,7 @@ export function ExplorerClient({ initialCategory, initialItems, initialRange, in
                       </th>
                       {selected.map((name) => (
                         <th key={name} className="pb-2 text-right font-medium text-muted-foreground">
-                          {name}
+                          {labelOf(name)}
                         </th>
                       ))}
                     </tr>
@@ -245,7 +248,7 @@ function ItemButton({
         historical && !selected && "border-dashed text-muted-foreground"
       )}
     >
-      {item.name}
+      {item.label ?? item.name}
       {!historical && <span className={cn("tabular-nums", selected ? "text-black/70" : "text-muted-foreground")}>{item.current}%</span>}
     </button>
   );
@@ -276,7 +279,9 @@ function ItemPicker({
 }) {
   const query = search.trim().toLowerCase();
   const { active, historical } = useMemo(() => {
-    const matches = query ? catalog.filter((i) => i.name.toLowerCase().includes(query)) : catalog;
+    const matches = query
+      ? catalog.filter((i) => i.name.toLowerCase().includes(query) || i.label?.toLowerCase().includes(query))
+      : catalog;
     return {
       active: matches.filter((i) => i.current !== null),
       historical: matches.filter((i) => i.current === null),
