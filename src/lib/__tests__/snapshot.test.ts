@@ -150,3 +150,62 @@ describe("checkManualSnapshotRequest", () => {
     expect(check("Bearer s3cret", "s3cret", null)).toBeNull();
   });
 });
+
+describe("health", () => {
+  beforeEach(() => {
+    delete (globalThis as { __hiveSchedulerStatus?: unknown }).__hiveSchedulerStatus;
+  });
+
+  it("records scheduler failures and successes for /api/health", async () => {
+    const health = await import("../health");
+    await snap.runScheduledSnapshot({ fetchRaw: async () => null, now: at("2026-01-02T07:00:00Z") });
+    expect(health.schedulerStatus()).toMatchObject({
+      lastResult: "failed",
+      lastError: "Failed to fetch from HiveOS API",
+      lastSuccessAt: null,
+    });
+
+    await snap.runScheduledSnapshot({ fetchRaw: async () => validRaw(), now: at("2026-01-02T07:10:00Z") });
+    expect(health.schedulerStatus()).toMatchObject({
+      lastResult: "taken",
+      lastSuccessAt: "2026-01-02T07:10:00.000Z",
+      lastError: "Failed to fetch from HiveOS API", // kept for diagnosis
+    });
+  });
+
+  it("is stale with no data or data older than 30 hours", async () => {
+    const health = await import("../health");
+    expect(health.getHealth().status).toBe("stale");
+
+    await snap.takeSnapshot(async () => validRaw());
+    const now = new Date();
+    expect(health.getHealth(now).status).toBe("ok");
+    expect(health.getHealth(new Date(now.getTime() + 31 * 3_600_000))).toMatchObject({
+      status: "stale",
+      ageHours: 31,
+    });
+  });
+
+  it("pings the healthcheck URL after a successful snapshot only", async () => {
+    process.env.HEALTHCHECK_PING_URL = "https://hc.example/ping";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("ok"));
+    try {
+      await snap.runScheduledSnapshot({ fetchRaw: async () => null });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      await snap.runScheduledSnapshot({ fetchRaw: async () => validRaw() });
+      expect(fetchSpy).toHaveBeenCalledWith("https://hc.example/ping", expect.anything());
+    } finally {
+      delete process.env.HEALTHCHECK_PING_URL;
+    }
+  });
+});
+
+describe("formatAge", () => {
+  it("reads naturally", async () => {
+    const { formatAge } = await import("../health");
+    expect(formatAge(0.5)).toBe("less than an hour ago");
+    expect(formatAge(1.2)).toBe("1 hour ago");
+    expect(formatAge(14.9)).toBe("14 hours ago");
+    expect(formatAge(72)).toBe("3 days ago");
+  });
+});

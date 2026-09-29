@@ -27,14 +27,14 @@ interface DashboardClientProps {
   stats: StatCard[];
   movers: Mover[];
   snapshotCount: number;
-  latestTimestamp: string | null;
+  latestLabel: string | null;
 }
 
 export function DashboardClient({
   stats,
   movers,
   snapshotCount,
-  latestTimestamp,
+  latestLabel,
 }: DashboardClientProps) {
   return (
     <div className="space-y-8">
@@ -44,8 +44,8 @@ export function DashboardClient({
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
             {snapshotCount} snapshots
-            {latestTimestamp && (
-              <> &middot; Latest: {latestTimestamp}</>
+            {latestLabel && (
+              <> &middot; Latest: {latestLabel}</>
             )}
           </p>
         </div>

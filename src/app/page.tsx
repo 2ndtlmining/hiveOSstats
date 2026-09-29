@@ -1,4 +1,5 @@
-import { getLatestSnapshot, getSnapshotCount, getTopMovers, getSparklineData } from "@/lib/data";
+import { getLatestSnapshot, getLatestSnapshotTime, getSnapshotCount, getTopMovers, getSparklineData } from "@/lib/data";
+import { dataAgeHours, formatAge, formatUtc } from "@/lib/health";
 import type { CategoryKey } from "@/types";
 import { CATEGORY_LABELS } from "@/types";
 import { DashboardClient } from "./dashboard-client";
@@ -30,12 +31,16 @@ export default function DashboardPage() {
   // Compute top movers in a single efficient pass
   const movers = getTopMovers(categories, CATEGORY_LABELS);
 
+  const latestTime = getLatestSnapshotTime();
+  const age = dataAgeHours(latestTime);
+  const latestLabel = latestTime && age !== null ? `${formatAge(age)} (${formatUtc(latestTime)})` : null;
+
   return (
     <DashboardClient
       stats={stats}
       movers={movers}
       snapshotCount={snapshotCount}
-      latestTimestamp={latest?.timestamp ?? null}
+      latestLabel={latestLabel}
     />
   );
 }

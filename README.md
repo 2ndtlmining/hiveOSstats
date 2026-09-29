@@ -73,6 +73,7 @@ Available variables:
 | `GITHUB_TOKEN` | No | GitHub token for committing snapshots to the repo |
 | `CRON_SECRET` | No | Enables `/api/cron/snapshot` for manual/external triggers (Bearer token). If unset, the endpoint is disabled; the built-in scheduler works either way |
 | `DATA_DIR` | No | Where snapshots are stored (default: `./data`) |
+| `HEALTHCHECK_PING_URL` | No | Pinged after every successful daily snapshot (e.g. a [Healthchecks.io](https://healthchecks.io) check), so a missed day alerts you |
 | `EXPORT_CACHE_DIR` | No | Where generated Excel exports are cached (default: `<os tmp>/hiveos-stats-exports`). Safe to delete; files are regenerated |
 
 ### Development
@@ -98,10 +99,10 @@ npm start
 src/
 ├── app/
 │   ├── api/
-│   │   ├── cron/snapshot/route.ts    # Cron-triggered snapshot endpoint
-│   │   ├── export/route.ts           # Excel export endpoint
-│   │   ├── snapshots/route.ts        # Manual snapshot trigger
-│   │   └── stats/route.ts            # Live stats proxy from HiveOS API
+│   │   ├── cron/snapshot/route.ts    # Manual/external snapshot trigger (needs CRON_SECRET)
+│   │   ├── export/route.ts           # Excel exports, served from the export cache
+│   │   ├── health/route.ts           # Health check for uptime monitors
+│   │   └── snapshots/route.ts        # Historical data queries
 │   ├── compare/
 │   │   ├── compare-client.tsx        # Client component for comparison UI
 │   │   └── page.tsx                  # Compare page (server component)
@@ -158,11 +159,23 @@ next.config.ts          # Next.js configuration (standalone output)
 
 ## API Routes
 
-### `GET /api/stats`
+### `GET /api/health`
 
-Proxies a live request to the HiveOS public API and returns raw statistics.
+For uptime monitors. Returns **200** when the latest snapshot is at most 30 hours old and **503** when it's older (or there are none), so a monitor alerts when daily snapshots stop.
 
-**Response:** Raw JSON from `https://api2.hiveos.farm/api/v2/hive/stats`
+```json
+{
+  "status": "ok",
+  "snapshotCount": 838,
+  "latestSnapshot": "2026-09-28T06:01:42.000Z",
+  "ageHours": 14.2,
+  "staleAfterHours": 30,
+  "scheduler": { "lastRunAt": "...", "lastResult": "skipped", "lastSuccessAt": "...", "lastError": null, "lastErrorAt": null },
+  "uptimeSec": 51234
+}
+```
+
+The dashboard also shows an amber banner on every page when data is stale.
 
 ---
 
@@ -212,7 +225,9 @@ Queries historical snapshot data from stored JSON files.
 - `?action=summary` -- Returns snapshot count and latest timestamp
 - `?action=names&category=coins` -- Returns list of unique item names for a category
 - `?action=latest` -- Returns the most recent snapshot (optionally filtered by category)
-- `?category=coins&names=BTC,ETH` -- Returns time series data for selected items
+- `?category=coins&names=BTC,ETH` -- Returns daily time series for up to 20 items. An item has no value on days it wasn't in HiveOS's stats
+
+Unknown actions or categories, a missing `category`, or more than 20 names return **400**. Responses carry an `ETag` (the data version; `If-None-Match` gets a 304) and are gzipped when the client accepts it.
 
 ---
 
@@ -273,6 +288,19 @@ npm start
 On startup you will see: `[Snapshot] Scheduler started - daily snapshot after 06:00 UTC, checked every 10 min`
 
 The scheduler runs via the Next.js instrumentation hook (`src/instrumentation.ts`). Rather than firing at an exact time, it checks every 10 minutes (and 30 seconds after boot) whether a snapshot is due. A restart, a late timer, or a HiveOS outage just delays the snapshot until the next successful check instead of skipping the day. Watch for `[Snapshot]` lines in the logs (e.g. `journalctl -u <service> | grep Snapshot`). Snapshots are saved to the `data/` directory (override with `DATA_DIR`).
+
+### Running as a service (systemd)
+
+`deploy/hiveos-stats.service` restarts the app if it crashes and starts it on boot. Edit `User`, `WorkingDirectory` and the node path (`command -v node`) first, then:
+
+```bash
+sudo cp deploy/hiveos-stats.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now hiveos-stats
+journalctl -u hiveos-stats -f        # logs, including [Snapshot] and [Export] lines
+```
+
+Point an uptime monitor at `/api/health` to be alerted when the site is down or the data is stale.
 
 ### Updating the server
 

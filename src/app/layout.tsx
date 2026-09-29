@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { Sidebar } from "@/components/layout/sidebar";
+import { StaleDataBanner } from "@/components/layout/stale-data-banner";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -26,6 +27,7 @@ export default function RootLayout({
           <Sidebar />
           <main className="md:pl-60">
             <div className="mx-auto max-w-7xl p-6 pt-16 md:pt-6">
+              <StaleDataBanner />
               {children}
             </div>
           </main>

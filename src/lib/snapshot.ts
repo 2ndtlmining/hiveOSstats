@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "crypto";
 import { fetchFromApi, cleanData, validateRawSnapshot } from "./hiveos";
 import { getLatestSnapshotTime, saveSnapshot, saveRawSnapshot, saveRejectedRawSnapshot } from "./data";
+import { recordSchedulerRun } from "./health";
 import type { RawSnapshot } from "@/types";
 
 /** One snapshot per day, taken at or soon after this hour (UTC). */
@@ -48,17 +49,39 @@ export async function runScheduledSnapshot(
   if (running) return "busy";
   running = true;
   try {
-    if (!isSnapshotDue(getLatestSnapshotTime(), now)) return "skipped";
+    if (!isSnapshotDue(getLatestSnapshotTime(), now)) {
+      recordSchedulerRun("skipped", now);
+      return "skipped";
+    }
 
     console.log(`[Snapshot] Snapshot due, taking one at ${now.toISOString()}`);
     const { raw, cleaned } = await takeSnapshot(fetchRaw);
     console.log(`[Snapshot] Saved: ${raw}, ${cleaned}`);
+    recordSchedulerRun("taken", now);
+    await pingHealthcheck();
     return "taken";
   } catch (err) {
-    console.error("[Snapshot] Failed, will retry on the next check:", (err as Error).message);
+    const message = (err as Error).message;
+    console.error("[Snapshot] Failed, will retry on the next check:", message);
+    recordSchedulerRun("failed", now, message);
     return "failed";
   } finally {
     running = false;
+  }
+}
+
+/**
+ * Optional dead man's switch: ping HEALTHCHECK_PING_URL (e.g. Healthchecks.io)
+ * after each successful snapshot, so a *missed* day raises an alert even while
+ * the site is up. Never throws.
+ */
+async function pingHealthcheck() {
+  const url = process.env.HEALTHCHECK_PING_URL;
+  if (!url) return;
+  try {
+    await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  } catch (err) {
+    console.error("[Snapshot] Healthcheck ping failed:", (err as Error).message);
   }
 }
 

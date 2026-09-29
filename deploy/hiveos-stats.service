@@ -1,0 +1,23 @@
+# systemd unit for HiveOS Stats. Install:
+#   sudo cp deploy/hiveos-stats.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now hiveos-stats
+# Edit User, WorkingDirectory and the node path in ExecStart first
+# (find it with `command -v node`; with nvm it's under ~/.nvm/versions/node/).
+[Unit]
+Description=HiveOS Stats dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=giel
+WorkingDirectory=/home/giel/hiveOSstats
+Environment=NODE_ENV=production
+# Optional settings (CRON_SECRET, DATA_DIR, HEALTHCHECK_PING_URL, ...)
+EnvironmentFile=-/home/giel/hiveOSstats/.env
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start --port 8050
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
