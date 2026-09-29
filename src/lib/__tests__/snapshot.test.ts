@@ -209,3 +209,10 @@ describe("formatAge", () => {
     expect(formatAge(72)).toBe("3 days ago");
   });
 });
+
+describe("formatUtc", () => {
+  it("formats in UTC regardless of locale data", async () => {
+    const { formatUtc } = await import("../health");
+    expect(formatUtc(new Date("2026-09-28T06:01:42Z"))).toBe("28 Sep 2026, 06:01 UTC");
+  });
+});

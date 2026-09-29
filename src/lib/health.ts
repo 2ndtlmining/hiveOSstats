@@ -62,9 +62,10 @@ export function formatAge(ageHours: number): string {
   return `${Math.floor(ageHours / 24)} days ago`;
 }
 
-/** "28 Sep 2026, 06:01 UTC" */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "28 Sep 2026, 06:01 UTC" (built by hand: locale data varies, e.g. "Sept"). */
 export function formatUtc(date: Date): string {
-  return `${date.toLocaleString("en-GB", {
-    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
-  })} UTC`;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}, ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} UTC`;
 }
