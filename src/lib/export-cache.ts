@@ -2,7 +2,7 @@ import { once } from "events";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { getCleanedFiles } from "./data";
+import { getDataVersion } from "./data";
 import { writeExport } from "./export";
 import { EXPORT_TYPES, type ExportType } from "./export-types";
 
@@ -16,11 +16,11 @@ function cacheDir(): string {
   return process.env.EXPORT_CACHE_DIR ?? path.join(os.tmpdir(), "hiveos-stats-exports");
 }
 
+/** e.g. "sep_2026-09-28_06-01-42_838", safe for a filename. */
 function dataVersion(): string | null {
-  const files = getCleanedFiles();
-  if (files.length === 0) return null;
-  const newest = files[files.length - 1].replace(/^cleaned_data_/, "").replace(/\.json$/, "");
-  return `${newest}_${files.length}`;
+  const version = getDataVersion();
+  if (!version) return null;
+  return version.replace(/^cleaned_data_/, "").replace(/\.json#/, "_");
 }
 
 /** e.g. "2026-09-28" from "sep_2026-09-28_06-01-42_838". */

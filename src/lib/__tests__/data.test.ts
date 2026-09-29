@@ -165,3 +165,25 @@ describe("snapshot diff", () => {
     expect(data.getSnapshotDiff("coins").rows).toEqual([]);
   });
 });
+
+describe("incremental loading", () => {
+  it("parses each file once and only reads new files after that", () => {
+    writeCoins("2026-01-01", { XMR: 50 });
+    writeCoins("2026-01-02", { XMR: 40 });
+    const read = vi.spyOn(fs, "readFileSync");
+
+    expect(data.getTimeSeries("coins", ["XMR"])).toHaveLength(2);
+    expect(read).toHaveBeenCalledTimes(2);
+
+    data.getTimeSeries("coins", ["XMR"]);
+    expect(read).toHaveBeenCalledTimes(2); // unchanged files aren't re-read
+
+    writeCoins("2026-01-03", { XMR: 45 });
+    expect(data.getTimeSeries("coins", ["XMR"]).map((p) => p.XMR)).toEqual([50, 40, 45]);
+    expect(read).toHaveBeenCalledTimes(3); // only the new file
+
+    fs.rmSync(path.join(dir, "cleaned_data_x_2026-01-01_06-00-00.json"));
+    expect(data.getTimeSeries("coins", ["XMR"]).map((p) => p.date)).toEqual(["2026-01-02", "2026-01-03"]);
+    read.mockRestore();
+  });
+});
