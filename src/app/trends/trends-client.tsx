@@ -2,12 +2,12 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AreaChart } from "@/components/charts/area-chart";
-import type { TimeSeriesPoint } from "@/types";
+import { fromColumns, type ColumnarSeries } from "@/lib/series-format";
 
 interface TrendView {
   title: string;
   names: string[];
-  data: TimeSeriesPoint[];
+  data: ColumnarSeries;
 }
 
 interface TrendsClientProps {
@@ -20,7 +20,7 @@ export function TrendsClient({ views }: TrendsClientProps) {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Trends</h1>
         <p className="text-muted-foreground">
-          Pre-built analytical views showing composition over time.
+          Composition over time: weekly averages of the current top 10 in each category.
         </p>
       </div>
 
@@ -30,7 +30,7 @@ export function TrendsClient({ views }: TrendsClientProps) {
             <CardTitle>{view.title}</CardTitle>
           </CardHeader>
           <CardContent>
-            <AreaChart data={view.data} selectedNames={view.names} stacked />
+            <AreaChart data={fromColumns(view.data)} selectedNames={view.names} stacked />
           </CardContent>
         </Card>
       ))}
