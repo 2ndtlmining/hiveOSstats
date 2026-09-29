@@ -41,6 +41,11 @@ export function isStale(ageHours: number | null): boolean {
   return ageHours === null || ageHours > STALE_AFTER_HOURS;
 }
 
+/** Replace absolute filesystem paths (e.g. from EACCES errors) before exposing a message publicly. */
+export function redactPaths(message: string | null): string | null {
+  return message?.replace(/(?:[A-Za-z]:)?[\\/][^\s'"]*[\\/][^\s'"]*/g, "<path>") ?? null;
+}
+
 export function getHealth(now = new Date()) {
   const latest = getLatestSnapshotTime();
   const ageHours = dataAgeHours(latest, now);
@@ -50,7 +55,7 @@ export function getHealth(now = new Date()) {
     latestSnapshot: latest?.toISOString() ?? null,
     ageHours: ageHours === null ? null : Math.round(ageHours * 10) / 10,
     staleAfterHours: STALE_AFTER_HOURS,
-    scheduler: schedulerStatus(),
+    scheduler: { ...schedulerStatus(), lastError: redactPaths(schedulerStatus().lastError) },
     uptimeSec: Math.round(process.uptime()),
   };
 }

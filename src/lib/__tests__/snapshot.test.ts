@@ -216,3 +216,16 @@ describe("formatUtc", () => {
     expect(formatUtc(new Date("2026-09-28T06:01:42Z"))).toBe("28 Sep 2026, 06:01 UTC");
   });
 });
+
+describe("redactPaths", () => {
+  it("hides absolute paths but keeps the rest of the message", async () => {
+    const { redactPaths } = await import("../health");
+    expect(redactPaths("EACCES: permission denied, open '/home/giel/hiveOSstats/data/x.json'"))
+      .toBe("EACCES: permission denied, open '<path>'");
+    expect(redactPaths("ENOTDIR: not a directory, scandir 'C:\\Users\\me\\data'"))
+      .toBe("ENOTDIR: not a directory, scandir '<path>'");
+    expect(redactPaths("Invalid HiveOS API response (saved as rejected_raw_data_x.json): coins: empty"))
+      .toBe("Invalid HiveOS API response (saved as rejected_raw_data_x.json): coins: empty");
+    expect(redactPaths(null)).toBeNull();
+  });
+});
