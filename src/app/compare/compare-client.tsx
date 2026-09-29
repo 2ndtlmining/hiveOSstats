@@ -35,8 +35,9 @@ export function CompareClient({ namesByCategory }: CompareClientProps) {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/snapshots?category=${category}&names=${selected.join(",")}`
+        `/api/snapshots?category=${category}&names=${encodeURIComponent(selected.join(","))}`
       );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setChartData(await res.json());
     } catch {
       setChartData([]);

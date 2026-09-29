@@ -1,38 +1,27 @@
 import { getTimeSeries, getTopItems } from "@/lib/data";
+import { toColumns, weeklyMeans } from "@/lib/series-format";
+import type { CategoryKey } from "@/types";
 import { TrendsClient } from "./trends-client";
 
 export const dynamic = "force-dynamic";
 
+const VIEWS: { title: string; category: CategoryKey }[] = [
+  { title: "GPU Market Share", category: "gpu_brands" },
+  { title: "Top 10 Coins", category: "coins" },
+  { title: "Mining Software Popularity", category: "miners" },
+  { title: "Top Algorithms", category: "algos" },
+  { title: "Top NVIDIA Models", category: "nvidia_models" },
+  { title: "Top AMD Models", category: "amd_models" },
+];
+
 export default function TrendsPage() {
-  // Pre-built views
-  const gpuBrands = getTopItems("gpu_brands", 10).map((i) => i.name);
-  const gpuSeries = getTimeSeries("gpu_brands", gpuBrands);
+  // Weekly means keep the shape of two-plus years of daily data at a
+  // seventh of the points, sent as columns to keep the page small
+  const views = VIEWS.map(({ title, category }) => {
+    const names = getTopItems(category, 10).map((i) => i.name);
+    const weekly = weeklyMeans(getTimeSeries(category, names), names);
+    return { title, names, data: toColumns(weekly, names) };
+  });
 
-  const topCoins = getTopItems("coins", 10).map((i) => i.name);
-  const coinSeries = getTimeSeries("coins", topCoins);
-
-  const topMiners = getTopItems("miners", 10).map((i) => i.name);
-  const minerSeries = getTimeSeries("miners", topMiners);
-
-  const topAlgos = getTopItems("algos", 10).map((i) => i.name);
-  const algoSeries = getTimeSeries("algos", topAlgos);
-
-  const topNvidia = getTopItems("nvidia_models", 10).map((i) => i.name);
-  const nvidiaSeries = getTimeSeries("nvidia_models", topNvidia);
-
-  const topAmd = getTopItems("amd_models", 10).map((i) => i.name);
-  const amdSeries = getTimeSeries("amd_models", topAmd);
-
-  return (
-    <TrendsClient
-      views={[
-        { title: "GPU Market Share", names: gpuBrands, data: gpuSeries },
-        { title: "Top 10 Coins", names: topCoins, data: coinSeries },
-        { title: "Mining Software Popularity", names: topMiners, data: minerSeries },
-        { title: "Top Algorithms", names: topAlgos, data: algoSeries },
-        { title: "Top NVIDIA Models", names: topNvidia, data: nvidiaSeries },
-        { title: "Top AMD Models", names: topAmd, data: amdSeries },
-      ]}
-    />
-  );
+  return <TrendsClient views={views} />;
 }

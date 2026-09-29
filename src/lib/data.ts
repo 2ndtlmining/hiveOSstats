@@ -7,22 +7,16 @@ function dataDir(): string {
 }
 
 // ─── Cache Layer ──────────────────────────────────────────────
-// All caches share a single TTL and invalidate together
+// Each snapshot file is parsed once and kept in memory. On every read the
+// directory listing is compared with what's loaded: new files are parsed,
+// removed ones dropped. Everything derived from the snapshots is cached per
+// data version, so it's rebuilt only when the set of files changes.
 
-let snapshotCache: CleanedSnapshot[] | null = null;
-let fileCountCache = 0;
-let cacheTime = 0;
-const CACHE_TTL = 5 * 60_000; // 5 minutes
+const parsedFiles = new Map<string, CleanedSnapshot | null>(); // null = unreadable
+let loaded: { version: string; snapshots: CleanedSnapshot[] } = { version: "", snapshots: [] };
 
 const categoryDataCache = new Map<CategoryKey, DataItem[]>();
-const uniqueNamesCache = new Map<CategoryKey, string[]>();
-
-function invalidateCache() {
-  snapshotCache = null;
-  categoryDataCache.clear();
-  uniqueNamesCache.clear();
-  cacheTime = 0;
-}
+const seriesCache = new Map<CategoryKey, CategorySeries>();
 
 // ─── Core Data Functions ──────────────────────────────────────
 
@@ -57,43 +51,49 @@ export function getLatestSnapshotTime(): Date | null {
   return files.length > 0 ? parseSnapshotTime(files[files.length - 1]) : null;
 }
 
-export function readAllSnapshots(): CleanedSnapshot[] {
-  const now = Date.now();
+/** Identifies the current set of snapshot files; changes when one is added or removed. */
+export function getDataVersion(): string {
   const files = getCleanedFiles();
-  const fileCount = files.length;
+  return files.length > 0 ? `${files[files.length - 1]}#${files.length}` : "";
+}
 
-  if (snapshotCache && now - cacheTime < CACHE_TTL && fileCountCache === fileCount) {
-    return snapshotCache;
+export function readAllSnapshots(): CleanedSnapshot[] {
+  const files = getCleanedFiles();
+  const version = files.length > 0 ? `${files[files.length - 1]}#${files.length}` : "";
+  if (version === loaded.version) return loaded.snapshots;
+
+  const current = new Set(files);
+  for (const file of parsedFiles.keys()) {
+    if (!current.has(file)) parsedFiles.delete(file);
   }
 
-  // Skip unreadable files so one corrupt snapshot can't take down every page
-  const data: CleanedSnapshot[] = [];
+  const snapshots: CleanedSnapshot[] = [];
   for (const file of files) {
-    try {
-      data.push(JSON.parse(fs.readFileSync(path.join(dataDir(), file), "utf-8")) as CleanedSnapshot);
-    } catch (err) {
-      console.error(`[Data] Skipping unreadable snapshot ${file}:`, (err as Error).message);
+    if (!parsedFiles.has(file)) {
+      // Skip unreadable files so one corrupt snapshot can't take down every page
+      try {
+        parsedFiles.set(file, JSON.parse(fs.readFileSync(path.join(dataDir(), file), "utf-8")));
+      } catch (err) {
+        console.error(`[Data] Skipping unreadable snapshot ${file}:`, (err as Error).message);
+        parsedFiles.set(file, null);
+      }
     }
+    const snap = parsedFiles.get(file);
+    if (snap) snapshots.push(snap);
   }
 
-  snapshotCache = data;
-  fileCountCache = fileCount;
-  cacheTime = now;
+  loaded = { version, snapshots };
   categoryDataCache.clear();
-  uniqueNamesCache.clear();
-  return data;
+  seriesCache.clear();
+  return snapshots;
 }
 
 export function getCategoryData(category: CategoryKey): DataItem[] {
-  if (categoryDataCache.has(category)) {
-    // Ensure snapshots are still cached (triggers reload if TTL expired)
-    readAllSnapshots();
-    if (categoryDataCache.has(category)) return categoryDataCache.get(category)!;
-  }
-
   const snapshots = readAllSnapshots();
-  const items: DataItem[] = [];
+  const cached = categoryDataCache.get(category);
+  if (cached) return cached;
 
+  const items: DataItem[] = [];
   for (const snap of snapshots) {
     const cat = snap[category];
     if (!cat) continue;
@@ -106,46 +106,81 @@ export function getCategoryData(category: CategoryKey): DataItem[] {
   return items;
 }
 
-export function getUniqueNames(category: CategoryKey): string[] {
-  if (uniqueNamesCache.has(category)) {
-    readAllSnapshots(); // ensure cache is valid
-    if (uniqueNamesCache.has(category)) return uniqueNamesCache.get(category)!;
-  }
-
-  const items = getCategoryData(category);
-  const names = [...new Set(items.map((i) => i.name))].sort();
-  uniqueNamesCache.set(category, names);
-  return names;
+/**
+ * One category as daily columns: every day with a snapshot, and for each item
+ * its mean share that day (NaN on days it wasn't in HiveOS's stats).
+ */
+export interface CategorySeries {
+  dates: string[];
+  names: string[];
+  values: Map<string, Float64Array>;
 }
 
+export function getCategorySeries(category: CategoryKey): CategorySeries {
+  const snapshots = readAllSnapshots();
+  const cached = seriesCache.get(category);
+  if (cached) return cached;
+
+  const dateSet = new Set<string>();
+  for (const snap of snapshots) {
+    for (const item of Object.values(snap[category] ?? {})) dateSet.add(item.snapshot.split(" ")[0]);
+  }
+  const dates = [...dateSet].sort();
+  const dateIndex = new Map(dates.map((d, i) => [d, i]));
+
+  // Several snapshots on one day are averaged
+  const sums = new Map<string, Float64Array>();
+  const counts = new Map<string, Uint16Array>();
+  for (const snap of snapshots) {
+    for (const item of Object.values(snap[category] ?? {})) {
+      const i = dateIndex.get(item.snapshot.split(" ")[0])!;
+      let sum = sums.get(item.name);
+      if (!sum) {
+        sums.set(item.name, (sum = new Float64Array(dates.length)));
+        counts.set(item.name, new Uint16Array(dates.length));
+      }
+      sum[i] += item.amount;
+      counts.get(item.name)![i] += 1;
+    }
+  }
+
+  const values = new Map<string, Float64Array>();
+  for (const [name, sum] of sums) {
+    const count = counts.get(name)!;
+    for (let i = 0; i < sum.length; i++) {
+      sum[i] = count[i] > 0 ? Math.round((sum[i] / count[i]) * 100) / 100 : NaN;
+    }
+    values.set(name, sum);
+  }
+
+  const series = { dates, names: [...values.keys()].sort(), values };
+  seriesCache.set(category, series);
+  return series;
+}
+
+export function getUniqueNames(category: CategoryKey): string[] {
+  return getCategorySeries(category).names;
+}
+
+/**
+ * Daily points for the selected items. Every day with a snapshot is on the
+ * timeline; an item missing from a day's snapshot has no value that day. It's
+ * left out rather than filled in, so charts and exports never show an item
+ * before it appeared or after it dropped out of HiveOS's stats.
+ */
 export function getTimeSeries(
   category: CategoryKey,
   selectedNames: string[]
 ): TimeSeriesPoint[] {
-  const items = getCategoryData(category);
-  const nameSet = new Set(selectedNames);
+  const { dates, values } = getCategorySeries(category);
+  const columns = selectedNames
+    .map((name) => [name, values.get(name)] as const)
+    .filter((c): c is readonly [string, Float64Array] => c[1] !== undefined);
 
-  // Every day with a snapshot is on the timeline, even if no selected item is
-  // in it. An item missing from a day's snapshot has no value that day: it's
-  // left out rather than filled in, so charts and exports never show an item
-  // before it appeared or after it dropped out of HiveOS's stats.
-  const byDate: Record<string, Record<string, number[]>> = {};
-  for (const item of items) {
-    const date = item.snapshot.split(" ")[0];
-    if (!byDate[date]) byDate[date] = {};
-    if (!nameSet.has(item.name)) continue;
-    if (!byDate[date][item.name]) byDate[date][item.name] = [];
-    byDate[date][item.name].push(item.amount);
-  }
-
-  // Aggregate: mean per day
-  return Object.keys(byDate).sort().map((date) => {
+  return dates.map((date, i) => {
     const point: TimeSeriesPoint = { date };
-    for (const name of selectedNames) {
-      const vals = byDate[date][name];
-      if (vals && vals.length > 0) {
-        point[name] = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100;
-      }
+    for (const [name, column] of columns) {
+      if (!Number.isNaN(column[i])) point[name] = column[i];
     }
     return point;
   });
@@ -338,9 +373,7 @@ function writeSnapshotFile(prefix: string, content: string): string {
 }
 
 export function saveSnapshot(data: CleanedSnapshot): string {
-  const filename = writeSnapshotFile("cleaned_data", JSON.stringify(data, null, 2));
-  invalidateCache();
-  return filename;
+  return writeSnapshotFile("cleaned_data", JSON.stringify(data, null, 2));
 }
 
 export function saveRawSnapshot(data: unknown): string {

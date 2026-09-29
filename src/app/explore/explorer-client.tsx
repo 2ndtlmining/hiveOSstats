@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, X } from "lucide-react";
 import { CATEGORIES } from "@/types";
 import type { CategoryKey, TimeSeriesPoint } from "@/types";
+import { MAX_SERIES_NAMES } from "@/lib/snapshots-query";
 
 // Recharts is large; only load it once there's a chart to draw
 const LineChart = dynamic(
@@ -40,10 +41,10 @@ export function ExplorerClient({ namesByCategory }: ExplorerClientProps) {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/snapshots?category=${category}&names=${selected.join(",")}`
+        `/api/snapshots?category=${category}&names=${encodeURIComponent(selected.join(","))}`
       );
-      const data = await res.json();
-      setChartData(data);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setChartData(await res.json());
     } catch {
       setChartData([]);
     } finally {
@@ -57,7 +58,11 @@ export function ExplorerClient({ namesByCategory }: ExplorerClientProps) {
 
   function toggleItem(name: string) {
     setSelected((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
+      prev.includes(name)
+        ? prev.filter((n) => n !== name)
+        : prev.length < MAX_SERIES_NAMES
+          ? [...prev, name]
+          : prev
     );
   }
 
@@ -90,7 +95,9 @@ export function ExplorerClient({ namesByCategory }: ExplorerClientProps) {
       {/* Selected items as removable chips */}
       {selected.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Selected:</span>
+          <span className="text-xs text-muted-foreground">
+            Selected{selected.length >= MAX_SERIES_NAMES ? ` (maximum of ${MAX_SERIES_NAMES})` : ""}:
+          </span>
           {selected.map((name) => (
             <Badge
               key={name}
